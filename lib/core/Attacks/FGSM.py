@@ -27,7 +27,7 @@ from lib.utils import plot_img_and_mask, plot_one_box, show_seg_result
 from lib.core.function import AverageMeter
 
 # FGSM         
-def validate_with_fgsm(epoch, config, val_loader, val_dataset, model, criterion, output_dir, tb_log_dir, writer_dict=None, logger=None, device='cpu', rank=-1, epsilon=0.1):
+def validate_with_fgsm(epoch, config, val_loader, val_dataset, model, criterion, output_dir, tb_log_dir, experiment_number, writer_dict=None, logger=None, device='cpu', rank=-1, epsilon=0.1):
     """
     Validate a model using the FGSM adversarial examples generated from the validation dataset.
     This method is intended to assess model robustness against adversarial attacks by modifying the validation images.
@@ -62,7 +62,7 @@ def validate_with_fgsm(epoch, config, val_loader, val_dataset, model, criterion,
     max_stride = 32
     weights = None
 
-    save_dir = output_dir + os.path.sep + 'visualization'
+    save_dir = os.path.join(output_dir, f'visualization_exp_{experiment_number}')
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
 
@@ -263,7 +263,7 @@ def validate_with_fgsm(epoch, config, val_loader, val_dataset, model, criterion,
                             #print(cls)
                             label_det_pred = f'{names[int(cls)]} {conf:.2f}'
                             plot_one_box(xyxy, perturbed_data_det , label=label_det_pred, color=colors[int(cls)], line_thickness=3)
-                        cv2.imwrite(save_dir+"/batch_{}_{}_det_pred.png".format(epoch,i),perturbed_data_det)
+                        cv2.imwrite(save_dir+"/batch_{}_{}_fgsm_det_pred.png".format(epoch,i),perturbed_data_det)
 
                         labels = target[0][target[0][:, 0] == i, 1:]
                         # print(labels)
@@ -276,7 +276,7 @@ def validate_with_fgsm(epoch, config, val_loader, val_dataset, model, criterion,
                             label_det_gt = f'{names[int(cls)]}'
                             xyxy = (x1,y1,x2,y2)
                             plot_one_box(xyxy, perturbed_data_gt , label=label_det_gt, color=colors[int(cls)], line_thickness=3)
-                        cv2.imwrite(save_dir+"/batch_{}_{}_det_gt.png".format(epoch,i),perturbed_data_gt)
+                        cv2.imwrite(save_dir+"/batch_{}_{}_fgsm_det_gt.png".format(epoch,i),perturbed_data_gt)
 
         # Statistics per image
         # output([xyxy,conf,cls])
@@ -493,10 +493,12 @@ def fgsm_attack(image, epsilon, data_grad):
     return perturbed_image
 
 
-def run_fgsm_experiments(model, valid_loader, device, config, criterion, epsilon_values):
+def run_fgsm_experiments(model, valid_loader, device, config, criterion, epsilon_values, final_output_directory):
     results = []
+    experiment_number = 0
     
     for epsilon in epsilon_values:
+        experiment_number +=1
         print("Epsilon: ", epsilon)
         # Perform FGSM validation for each epsilon value
         da_segment_result, ll_segment_result, detect_result, loss_avg, maps, t = validate_with_fgsm(
@@ -506,8 +508,9 @@ def run_fgsm_experiments(model, valid_loader, device, config, criterion, epsilon
             val_dataset=valid_loader.dataset,
             model=model,
             criterion=criterion,
-            output_dir="output",
+            output_dir= final_output_directory,
             tb_log_dir="log",
+            experiment_number=experiment_number,
             device=device,
             epsilon= epsilon
         )

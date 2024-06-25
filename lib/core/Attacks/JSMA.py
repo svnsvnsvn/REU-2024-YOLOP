@@ -71,37 +71,8 @@ def calculate_saliency(model, valid_loader, device, config, criterion):
     print("total time in calculating saliency maps {}s".format(end_t - start_t))
     saliency_maps = np.concatenate(saliency_maps, axis=0)
     
-    #    # Plot and save the saliency maps
-    # for i, saliency_map in enumerate(saliency_maps):
-    #     plt.figure(figsize=(10, 10))
-    #     plt.imshow(saliency_map[0], cmap='hot')
-    #     plt.colorbar()
-    #     plt.title(f"Saliency Map {i+1}")
-    #     plt.savefig(f"saliency_maps/saliency_map_{i+1}.png")
-    #     plt.close()
-    
     # Plot and save the saliency maps and original images
     img = img.detach().cpu().numpy()  # Move the original images back to CPU and convert to numpy
-
-    # for i, (saliency_map, original_image) in enumerate(zip(saliency_maps, img)):
-        # # Save the original image
-        # plt.figure(figsize=(30, 30))
-        # if original_image.shape[0] == 3:  # Check if the image is RGB
-        #     plt.imshow(np.transpose(original_image, (1, 2, 0)).astype('uint8'))
-        # else:
-        #     plt.imshow(original_image[0].astype('uint8'), cmap='gray')
-        # plt.axis('off')
-        # plt.title(f"Original Image {i+1}")
-        # plt.savefig(f"maps/original_image_{i+1}.png")
-        # plt.close()
-
-        # Save the saliency map
-        # plt.figure(figsize=(30, 30))
-        # plt.imshow(saliency_map[0], cmap='hot')
-        # plt.colorbar()
-        # plt.title(f"Saliency Map {i+1}")
-        # plt.savefig(f"maps/saliency_map_{i+1}.png")
-        # plt.close()
   
     return saliency_maps
 
@@ -129,24 +100,13 @@ def find_and_perturb_highest_scoring_pixels(images, saliency_maps, num_pixels_to
         flat_indices = np.argsort(saliency_map.flatten())[::-1]
         top_indices = flat_indices[:num_pixels_to_perturb]
 
-        '''        # Convert the flat indices back to 2D coordinates
-                top_coords = np.unravel_index(top_indices, saliency_map.shape)
-                
-                print(f" The top:  [{top_coords}]")
-        '''
-
         # Convert the flat indices back to 2D coordinates (y, x)
         top_coords = np.unravel_index(top_indices, saliency_map.shape)
         y_coords, x_coords = top_coords[1], top_coords[2]
-        
-        # print(f"Top coordinates (y, x): {list(zip(y_coords, x_coords))}")
 
         # Create a copy of the image to perturb
         perturbed_image = image.copy()
         
-        # print(f"The type of the image is: {type(perturbed_image)}")
-        
-
         # Apply perturbation to the top pixels
         for coord in zip(*top_coords):
             if perturbation_type == 'add':
@@ -165,12 +125,10 @@ def find_and_perturb_highest_scoring_pixels(images, saliency_maps, num_pixels_to
 
         all_top_coords.append(top_coords)
         
-    # print(f"\nThe length of the top coords: {len(all_top_coords)}\n")
-
     return torch.cat(perturbed_images, dim=0), all_top_coords
 
 def validateJSMA(epoch,config, val_loader, val_dataset, model, criterion, output_dir,
-tb_log_dir, perturbed_images, writer_dict=None, logger=None, device='cpu', rank=-1):
+tb_log_dir, perturbed_images, experiment_number, writer_dict=None, logger=None, device='cpu', rank=-1):
     """
     validata
 
@@ -188,7 +146,7 @@ tb_log_dir, perturbed_images, writer_dict=None, logger=None, device='cpu', rank=
     max_stride = 32
     weights = None
 
-    save_dir = output_dir + os.path.sep + 'visualization'
+    save_dir = os.path.join(output_dir, f'visualization_exp_{experiment_number}')
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
 
@@ -246,16 +204,14 @@ tb_log_dir, perturbed_images, writer_dict=None, logger=None, device='cpu', rank=
 
     for batch_i, (img_throw_away, target, paths, shapes) in tqdm(enumerate(val_loader), total=len(val_loader)):
         if not config.DEBUG:
-            # img = img_throw_away.to(device, non_blocking=True)
-            # print(f"img: {img.shape}")
+
             assign_target = []
             for tgt in target:
                 assign_target.append(tgt.to(device))
             target = assign_target
             nb, _, height, width = img.shape
             
-            # print(f"Image throwaway: {img_throw_away[0]}")
-            # print(f"\nPertubed images: {img[0]}")
+       
 
 
         with torch.no_grad():
@@ -337,7 +293,7 @@ tb_log_dir, perturbed_images, writer_dict=None, logger=None, device='cpu', rank=
                         # plot_img_and_mask(img_test, seg_mask, i,epoch,save_dir)
                         img_test1 = img_test.copy()
                         _ = show_seg_result(img_test, da_seg_mask, i,epoch,save_dir, attack_type = "jsma")
-                        _ = show_seg_result(img_test1, da_gt_mask, i, epoch, save_dir, is_gt=True, attack_type="jsma")
+                        # _ = show_seg_result(img_test1, da_gt_mask, i, epoch, save_dir, is_gt=True, attack_type="jsma")
 
                         img_ll = cv2.imread(paths[i])
                         ll_seg_mask = ll_seg_out[i][:, pad_h:height-pad_h, pad_w:width-pad_w].unsqueeze(0)
@@ -354,7 +310,7 @@ tb_log_dir, perturbed_images, writer_dict=None, logger=None, device='cpu', rank=
                         # plot_img_and_mask(img_test, seg_mask, i,epoch,save_dir)
                         img_ll1 = img_ll.copy()
                         _ = show_seg_result(img_ll, ll_seg_mask, i,epoch,save_dir, is_ll=True, attack_type = "jsma")
-                        _ = show_seg_result(img_ll1, ll_gt_mask, i, epoch, save_dir, is_ll=True, is_gt=True, attack_type = "jsma")
+                        # _ = show_seg_result(img_ll1, ll_gt_mask, i, epoch, save_dir, is_ll=True, is_gt=True, attack_type = "jsma")
 
                         img_det = cv2.imread(paths[i])
                         img_gt = img_det.copy()
@@ -365,21 +321,21 @@ tb_log_dir, perturbed_images, writer_dict=None, logger=None, device='cpu', rank=
                             #print(cls)
                             label_det_pred = f'{names[int(cls)]} {conf:.2f}'
                             plot_one_box(xyxy, img_det , label=label_det_pred, color=colors[int(cls)], line_thickness=3)
-                        cv2.imwrite(save_dir+"/JSMAbatch_{}_{}_det_pred.png".format(epoch,i),img_det)
+                        cv2.imwrite(save_dir+"/batch_{}_{}_jsma_det_pred.png".format(epoch,i),img_det)
 
                         labels = target[0][target[0][:, 0] == i, 1:]
                         # print(labels)
                         labels[:,1:5]=xywh2xyxy(labels[:,1:5])
                         if len(labels):
                             labels[:,1:5]=scale_coords(img[i].shape[1:],labels[:,1:5],img_gt.shape).round()
-                        for cls,x1,y1,x2,y2 in labels:
+                    '''    for cls,x1,y1,x2,y2 in labels:
                             #print(names)
                             #print(cls)
                             label_det_gt = f'{names[int(cls)]}'
                             xyxy = (x1,y1,x2,y2)
                             plot_one_box(xyxy, img_gt , label=label_det_gt, color=colors[int(cls)], line_thickness=3)
-                        cv2.imwrite(save_dir+"/JSMAbatch_{}_{}_det_gt.png".format(epoch,i),img_gt)
-
+                         cv2.imwrite(save_dir+"/batch_{}_{}_jsma_det_gt.png".format(epoch,i),img_gt)
+                            This is GT stuff '''
         # Statistics per image
         # output([xyxy,conf,cls])
         # target[0] ([img_id,cls,xyxy])
@@ -559,10 +515,12 @@ tb_log_dir, perturbed_images, writer_dict=None, logger=None, device='cpu', rank=
     
     return da_segment_result, ll_segment_result, detect_result, losses.avg, maps, t
 
-def run_jsma_experiments(model, valid_loader, device, config, criterion, perturbation_params):
+def run_jsma_experiments(model, valid_loader, device, config, criterion, perturbation_params, final_output_directory):
     results = []
+    experiment_number = 0
 
     for num_pixels, perturb_value, attack_type in perturbation_params:
+        experiment_number+=1
         # Calculate saliency maps
         saliency_maps = calculate_saliency(model, valid_loader, device, config, criterion)
         
@@ -587,9 +545,10 @@ def run_jsma_experiments(model, valid_loader, device, config, criterion, perturb
             val_dataset=valid_loader.dataset,
             model=model,
             criterion=criterion,
-            output_dir="output",
+            output_dir= final_output_directory,
             tb_log_dir="log",
             perturbed_images=perturbed_images,
+            experiment_number=experiment_number,
             device=device
         )
 
