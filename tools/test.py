@@ -91,16 +91,43 @@ def parse_args():
     return args
 
 
+
     
 def main():
     # set all the configurations
     args = parse_args()
     update_config(cfg, args)
+    
+    print("Welcome. Please select your attack type.\n\t 1. FGSM \n\t2. JSMA \n\t3. UAP \n\t4. CCP")
+    
+    attack_int = int(input("Enter your choice of attack: "))
+    
+    match attack_int:
+        case 1:
+            attack_type = "FGSM"
+            print("FGSM selected\n")
+
+        case 2: 
+            attack_type = "JSMA"
+            print("JSMA selected\n")
+
+        case 3: 
+            attack_type = "UAP"
+            print("UAP selected\n")
+
+        case 4:
+            attack_type = "CCP"
+            print("CCP selected\n")
+
+        case _:
+            attack_type = None
+            print("None selected. Will run only a normal validation.")
+    
 
     # TODO: handle distributed training logger
     # set the logger, tb_log_dir means tensorboard logdir
     logger, final_output_dir, tb_log_dir = create_logger(
-        cfg, cfg.LOG_DIR, 'test', attack_type='FGSM')
+        cfg, cfg.LOG_DIR, 'test', attack_type=attack_type)
     
     print(logger)
 
@@ -206,87 +233,92 @@ def main():
     'detect_result': detect_results[2],  # mAP@0.5
     'loss_avg': total_loss,
 }
-    
-    # FGSM
-    epsilons = [.03, .05, .1, .15, .2, .3, .5, .75, .9, 1]  # FGSM attack parameters
-    results_df = run_fgsm_experiments(model, valid_loader, device, cfg, criterion, epsilons, final_output_dir)
-    results_df['epsilon'] = epsilons
-    initial_values = results_df[results_df['epsilon'] == 0]
+    match attack_type:
+        case "FGSM":
+            # FGSM
+            epsilons = [.03, .05, .1, .15, .2, .3, .5, .75, .9, 1]  # FGSM attack parameters
+            results_df = run_fgsm_experiments(model, valid_loader, device, cfg, criterion, epsilons, final_output_dir)
+            results_df['epsilon'] = epsilons
+            initial_values = results_df[results_df['epsilon'] == 0]
 
-    metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
-    percentage_drops = results_df.copy()
-    for metric in metrics:
-        initial_value = initial_values[metric].values[0]
-        percentage_drops[metric] = results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
+            metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
+            percentage_drops = results_df.copy()
+            for metric in metrics:
+                initial_value = initial_values[metric].values[0]
+                percentage_drops[metric] = results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
 
-    # Create DataFrame for Display
-    display_df = pd.DataFrame({'epsilon': epsilons})
-    for metric in metrics:
-        display_df[metric] = results_df[metric]
-        display_df[f'{metric}_drop'] = percentage_drops[metric].apply(lambda x: f'{x:.2f}%')
+            # Create DataFrame for Display
+            display_df = pd.DataFrame({'epsilon': epsilons})
+            for metric in metrics:
+                display_df[metric] = results_df[metric]
+                display_df[f'{metric}_drop'] = percentage_drops[metric].apply(lambda x: f'{x:.2f}%')
 
-    # Plotting the DataFrame
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.axis('tight')
-    ax.axis('off')
+            # Plotting the DataFrame
+            fig, ax = plt.subplots(figsize=(12, 6))
+            ax.axis('tight')
+            ax.axis('off')
 
-    # Create table
-    table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
+            # Create table
+            table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
 
-    # Save the table as an image
-    plt.savefig('FGSM_results.png', bbox_inches='tight', dpi=300)
-    plt.show()
-    
-    '''
-    # JSMA        
-    perturbation_params = [
-        (10, 0.1, 'add'),
-        (10, 0.1, 'set'),
-        (10, 0.1, 'noise'),
-        (20, 0.1, 'add'),
-        (20, 0.1, 'set'),
-        (20, 0.1, 'noise'),
-        (30, 0.1, 'add'),
-        (30, 0.1, 'set'),
-        (30, 0.1, 'noise'),
-        (50, 0.1, 'add'),
-        (50, 0.1, 'set'),
-        (50, 0.1, 'noise'),
-        (100, 0.1, 'add'),
-        (100, 0.1, 'set'),
-        (100, 0.1, 'noise')
-    ]
+            # Save the table as an image
+            plt.savefig('FGSM_results.png', bbox_inches='tight', dpi=300)
+            plt.show()
+        case "JSMA":
+            # JSMA        
+            perturbation_params = [
+                (10, 0.1, 'add'),
+                (10, 0.1, 'set'),
+                (10, 0.1, 'noise'),
+                (20, 0.1, 'add'),
+                (20, 0.1, 'set'),
+                (20, 0.1, 'noise'),
+                (30, 0.1, 'add'),
+                (30, 0.1, 'set'),
+                (30, 0.1, 'noise'),
+                (50, 0.1, 'add'),
+                (50, 0.1, 'set'),
+                (50, 0.1, 'noise'),
+                (100, 0.1, 'add'),
+                (100, 0.1, 'set'),
+                (100, 0.1, 'noise')
+            ]
 
-    jsma_results_df = run_jsma_experiments(model, valid_loader, device, cfg, criterion, perturbation_params, final_output_dir)
-    percentage_drops = jsma_results_df.copy()
-    for metric in ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']:
-        initial_value = normal_metrics[metric]
-        percentage_drops[metric] = jsma_results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
+            jsma_results_df = run_jsma_experiments(model, valid_loader, device, cfg, criterion, perturbation_params, final_output_dir)
+            percentage_drops = jsma_results_df.copy()
+            for metric in ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']:
+                initial_value = normal_metrics[metric]
+                percentage_drops[metric] = jsma_results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
 
-    display_df = pd.DataFrame({'num_pixels': jsma_results_df['num_pixels'], 'perturbation_type': jsma_results_df['attack_type']})
-    for metric in ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']:
-        display_df[metric] = jsma_results_df[metric]
-        display_df[f'{metric}_drop'] = percentage_drops[metric].apply(lambda x: f'<span style="color:red">{x:.2f}%</span>')
-        for col in display_df.columns:
-            if col.endswith('_drop'):
-                display_df[col] = display_df[col].apply(html_to_text)
+            # Function to create and save table for each attack type
+            def create_and_save_table(attack_type):
+                display_df = jsma_results_df[jsma_results_df['attack_type'] == attack_type].copy()
+                display_df['normal_metrics'] = ''
 
-    # Plotting the DataFrame
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.axis('tight')
-    ax.axis('off')
+                for metric in ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']:
+                    display_df[metric] = jsma_results_df[metric]
+                    display_df[f'{metric}_drop'] = percentage_drops[metric].apply(lambda x: f'<span style="color:red">{x:.2f}%</span>')
 
-    # Create table
-    table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
+                # Plotting the DataFrame
+                fig, ax = plt.subplots(figsize=(12, 6))
+                ax.axis('tight')
+                ax.axis('off')
 
-    # Style the drop columns to be red
-    for (i, j), cell in table.get_celld().items():
-        if j > 0 and display_df.columns[j].endswith('_drop'):
-            cell.set_text_props(color='red')
+                # Create table
+                table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
 
-    # Save the table as an image
-    plt.savefig('JSMA_results.png', bbox_inches='tight', dpi=300)
-    '''
+                # Style the drop columns to be red
+                for (i, j), cell in table.get_celld().items():
+                    if j > 0 and display_df.columns[j].endswith('_drop'):
+                        cell.set_text_props(color='red')
+
+                # Save the table as an image
+                plt.savefig(f'JSMA_results_{attack_type}.png', bbox_inches='tight', dpi=300)
+                plt.close(fig)
+                
+            # Create and save tables for each attack type
+            for attack_type in jsma_results_df['attack_type'].unique():
+                create_and_save_table(attack_type)
     
     print("Test Finish")
     

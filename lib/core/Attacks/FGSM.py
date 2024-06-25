@@ -235,7 +235,7 @@ def validate_with_fgsm(epoch, config, val_loader, val_dataset, model, criterion,
                         # plot_img_and_mask(img_test, seg_mask, i,epoch,save_dir)
                         perturbed_data_test1 = perturbed_data_test.copy()
                         _ = show_seg_result(perturbed_data_test, da_seg_mask, i,epoch,save_dir, attack_type = "fgsm")
-                        _ = show_seg_result(perturbed_data_test1, da_gt_mask, i, epoch, save_dir, is_gt=True, attack_type= "fgsm")
+                        # _ = show_seg_result(perturbed_data_test1, da_gt_mask, i, epoch, save_dir, is_gt=True, attack_type= "fgsm")
 
                         perturbed_data_ll = cv2.imread(paths[i])
                         ll_seg_mask = perturbed_ll_seg_out[i][:, pad_h:height-pad_h, pad_w:width-pad_w].unsqueeze(0)
@@ -252,7 +252,7 @@ def validate_with_fgsm(epoch, config, val_loader, val_dataset, model, criterion,
                         # plot_img_and_mask(img_test, seg_mask, i,epoch,save_dir)
                         perturbed_data_ll1 = perturbed_data_ll.copy()
                         _ = show_seg_result(perturbed_data_ll, ll_seg_mask, i,epoch,save_dir, is_ll=True, attack_type = "fgsm")
-                        _ = show_seg_result(perturbed_data_ll1, ll_gt_mask, i, epoch, save_dir, is_ll=True, is_gt=True, attack_type = "fgsm")
+                        # _ = show_seg_result(perturbed_data_ll1, ll_gt_mask, i, epoch, save_dir, is_ll=True, is_gt=True, attack_type = "fgsm")
 
                         perturbed_data_det = cv2.imread(paths[i])
                         perturbed_data_gt = perturbed_data_det.copy()
@@ -270,13 +270,14 @@ def validate_with_fgsm(epoch, config, val_loader, val_dataset, model, criterion,
                         labels[:,1:5]=xywh2xyxy(labels[:,1:5])
                         if len(labels):
                             labels[:,1:5]=scale_coords(perturbed_data[i].shape[1:],labels[:,1:5],perturbed_data_gt.shape).round()
-                        for cls,x1,y1,x2,y2 in labels:
+                    '''    for cls,x1,y1,x2,y2 in labels:
                             #print(names)
                             #print(cls)
                             label_det_gt = f'{names[int(cls)]}'
                             xyxy = (x1,y1,x2,y2)
                             plot_one_box(xyxy, perturbed_data_gt , label=label_det_gt, color=colors[int(cls)], line_thickness=3)
-                        cv2.imwrite(save_dir+"/batch_{}_{}_fgsm_det_gt.png".format(epoch,i),perturbed_data_gt)
+                         cv2.imwrite(save_dir+"/batch_{}_{}_fgsm_det_gt.png".format(epoch,i),perturbed_data_gt)
+                         '''
 
         # Statistics per image
         # output([xyxy,conf,cls])
