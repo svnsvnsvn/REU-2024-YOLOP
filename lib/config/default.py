@@ -50,11 +50,11 @@ _C.LOSS.LL_IOU_GAIN = 0.2 # lane line iou loss gain
 
 # DATASET related params
 _C.DATASET = CN(new_allowed=True)
-_C.DATASET.DATAROOT = 'lib/dataset/images' #'/home/zwt/bdd/bdd100k/images/100k'       # the path of images folder
+_C.DATASET.DATAROOT = 'lib/dataset/images/bdd100k' #'/home/zwt/bdd/bdd100k/images/100k'       # the path of images folder
 _C.DATASET.LABELROOT = 'lib/dataset/det_annotations' #'/home/zwt/bdd/bdd100k/labels/100k'      # the path of det_annotations folder
 _C.DATASET.MASKROOT = 'lib/dataset/da_seg_annotations' # '/home/zwt/bdd/bdd_seg_gt'                # the path of da_seg_annotations folder
 _C.DATASET.LANEROOT = 'lib/dataset/ll_seg_annotations' #'/home/zwt/bdd/bdd_lane_gt'               # the path of ll_seg_annotations folder
-# I used relative paths above...hopefully that works -- it did work
+
 _C.DATASET.DATASET = 'BddDataset'
 _C.DATASET.TRAIN_SET = 'train'
 _C.DATASET.TEST_SET = 'val'
@@ -130,29 +130,23 @@ _C.TEST.NMS_IOU_THRESHOLD  = 0.6
 
 def update_config(cfg, args):
     cfg.defrost()
-    # cfg.merge_from_file(args.cfg)
 
     if args.modelDir:
         cfg.OUTPUT_DIR = args.modelDir
 
     if args.logDir:
         cfg.LOG_DIR = args.logDir
-    
-    # if args.conf_thres:
-    #     cfg.TEST.NMS_CONF_THRESHOLD = args.conf_thres
-
-    # if args.iou_thres:
-    #     cfg.TEST.NMS_IOU_THRESHOLD = args.iou_thres
-    
-
-
-    # cfg.MODEL.PRETRAINED = os.path.join(
-    #     cfg.DATA_DIR, cfg.MODEL.PRETRAINED
-    # )
-    #
-    # if cfg.TEST.MODEL_FILE:
-    #     cfg.TEST.MODEL_FILE = os.path.join(
-    #         cfg.DATA_DIR, cfg.TEST.MODEL_FILE
-    #     )
+    # Update dataset-specific configurations
+    if args.dataset == 'Carla':
+        _C.DATASET.DATAROOT = 'lib/dataset/images/carla_imageset'
+        cfg.DATASET.DATASET = 'CarlaDataset'
+        cfg.DATASET.TRAIN_SET = 'train'
+        cfg.DATASET.TEST_SET = 'val'
+        cfg.DATASET.DATA_FORMAT = 'jpg'
+        cfg.DATASET.SELECT_DATA = False
+        cfg.DATASET.ORG_IMG_SIZE = [1080, 1920]
+    elif args.dataset == 'BDD100k':
+        cfg.DATASET.DATASET = 'BddDataset'
+        # Assuming default settings for BDD100k are already set
 
     cfg.freeze()

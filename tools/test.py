@@ -86,42 +86,27 @@ def parse_args():
     parser.add_argument('--weights', nargs='+', type=str, default='/data2/zwt/wd/YOLOP/runs/BddDataset/detect_and_segbranch_whole/epoch-169.pth', help='model.pth path(s)')
     parser.add_argument('--conf_thres', type=float, default=0.001, help='object confidence threshold')
     parser.add_argument('--iou_thres', type=float, default=0.6, help='IOU threshold for NMS')
+   # Adding new arguments for dataset and attack type
+    parser.add_argument('--dataset', type=str, choices=['Carla', 'BDD100k'], required=True, help='Choice of dataset: Carla or BDD100k')
+    parser.add_argument('--attack', type=str, choices=['FGSM', 'JSMA', 'UAP', 'CCP', 'None'], required=True, help='Choice of attack: FGSM, JSMA, UAP, CCP, or None')
+    
     args = parser.parse_args()
-
     return args
 
-
-
-    
 def main():
     # set all the configurations
     args = parse_args()
     update_config(cfg, args)
     
-    print("Welcome. Please select your attack type.\n\t 1. FGSM \n\t2. JSMA \n\t3. UAP \n\t4. CCP")
     
-    attack_int = int(input("Enter your choice of attack: "))
-    
-    match attack_int:
-        case 1:
-            attack_type = "FGSM"
-            print("FGSM selected\n")
+    # Attack type selection based on argument
+    attack_type = args.attack
+    if attack_type == 'None':
+        attack_type = None
+        print("None selected. Will run only a normal validation.")
+    else:
+        print(f"{attack_type} selected\n")
 
-        case 2: 
-            attack_type = "JSMA"
-            print("JSMA selected\n")
-
-        case 3: 
-            attack_type = "UAP"
-            print("UAP selected\n")
-
-        case 4:
-            attack_type = "CCP"
-            print("CCP selected\n")
-
-        case _:
-            attack_type = None
-            print("None selected. Will run only a normal validation.")
     
 
     # TODO: handle distributed training logger
@@ -179,6 +164,8 @@ def main():
         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
     )
 
+    print(f"\n\n\n\ndataset.{cfg.DATASET.DATASET}\n\n\n")
+    
     valid_dataset = eval('dataset.' + cfg.DATASET.DATASET)(
         cfg=cfg,
         is_train=False,
@@ -237,14 +224,18 @@ def main():
         case "FGSM":
             # FGSM
             epsilons = [.03, .05, .1, .15, .2, .3, .5, .75, .9, 1]  # FGSM attack parameters
+
+
             results_df = run_fgsm_experiments(model, valid_loader, device, cfg, criterion, epsilons, final_output_dir)
+            
+            FGSM_percentage_drops = results_df.copy()
+            
             results_df['epsilon'] = epsilons
-            initial_values = results_df[results_df['epsilon'] == 0]
 
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
-            percentage_drops = results_df.copy()
+            
             for metric in metrics:
-                initial_value = initial_values[metric].values[0]
+                initial_value = normal_metrics[metric]
                 percentage_drops[metric] = results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
 
             # Create DataFrame for Display
@@ -264,6 +255,7 @@ def main():
             # Save the table as an image
             plt.savefig('FGSM_results.png', bbox_inches='tight', dpi=300)
             plt.show()
+            
         case "JSMA":
             # JSMA        
             perturbation_params = [
@@ -285,7 +277,9 @@ def main():
             ]
 
             jsma_results_df = run_jsma_experiments(model, valid_loader, device, cfg, criterion, perturbation_params, final_output_dir)
+            
             percentage_drops = jsma_results_df.copy()
+            
             for metric in ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']:
                 initial_value = normal_metrics[metric]
                 percentage_drops[metric] = jsma_results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
