@@ -1,6 +1,5 @@
 import argparse
 import os, sys
-from glob import glob
 import pandas as pd
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
@@ -33,14 +32,7 @@ from lib.models import get_net
 from lib.utils.utils import create_logger, select_device
 
 
-from pathlib import Path
-import json
-import random
-import cv2
-from tqdm import tqdm
-import math
 import datetime
-
 from bs4 import BeautifulSoup
 import matplotlib.pyplot as plt
 
@@ -86,9 +78,10 @@ def parse_args():
     parser.add_argument('--weights', nargs='+', type=str, default='/data2/zwt/wd/YOLOP/runs/BddDataset/detect_and_segbranch_whole/epoch-169.pth', help='model.pth path(s)')
     parser.add_argument('--conf_thres', type=float, default=0.001, help='object confidence threshold')
     parser.add_argument('--iou_thres', type=float, default=0.6, help='IOU threshold for NMS')
+    
    # Adding new arguments for dataset and attack type
-    parser.add_argument('--dataset', type=str, choices=['Carla', 'BDD100k'], required=True, help='Choice of dataset: Carla or BDD100k')
-    parser.add_argument('--attack', type=str, choices=['FGSM', 'JSMA', 'UAP', 'CCP', 'None'], required=True, help='Choice of attack: FGSM, JSMA, UAP, CCP, or None')
+    parser.add_argument('--dataset', type=str, choices=['Carla', 'BDD100k'], help='Choice of dataset: Carla or BDD100k', default='BDD100k')
+    parser.add_argument('--attack', type=str, choices=['FGSM', 'JSMA', 'UAP', 'CCP', 'None'], help='Choice of attack: FGSM, JSMA, UAP, CCP, or None', default= 'None')
     
     args = parser.parse_args()
     return args
@@ -101,6 +94,7 @@ def main():
     
     # Attack type selection based on argument
     attack_type = args.attack
+    
     if attack_type == 'None':
         attack_type = None
         print("None selected. Will run only a normal validation.")
@@ -163,8 +157,6 @@ def main():
     normalize = transforms.Normalize(
         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
     )
-
-    print(f"\n\n\n\ndataset.{cfg.DATASET.DATASET}\n\n\n")
     
     valid_dataset = eval('dataset.' + cfg.DATASET.DATASET)(
         cfg=cfg,
