@@ -47,7 +47,7 @@ def flatten_results(df):
             "perturb_value": row["perturb_value"],
             "attack_type": row["attack_type"],
             "loss_avg": row["loss_avg"],
-            "time": row["time"][0],  # Assuming you want the first value from the time list
+            "time": row["time"][0],  
         }
         # Extracting values from tuples/lists
         flat_row["da_segment_iou"] = row["da_segment_result"][0]
@@ -157,6 +157,7 @@ def main():
     normalize = transforms.Normalize(
         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
     )
+    
     
     valid_dataset = eval('dataset.' + cfg.DATASET.DATASET)(
         cfg=cfg,
