@@ -10,7 +10,12 @@ inference/
 *.pt
 *.tar
 *.tar.gz
-lib/dataset
+lib/dataset/da_seg_annotations
+lib/dataset/det_annotations
+lib/dataset/ll_seg_annotations
+lib/dataset/images
+lib/dataset/__pycache__
+
 output/
 display_df_image.png
 Table.png

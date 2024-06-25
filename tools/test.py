@@ -47,8 +47,9 @@ def flatten_results(df):
             "perturb_value": row["perturb_value"],
             "attack_type": row["attack_type"],
             "loss_avg": row["loss_avg"],
-            "time": row["time"][0],  
+            "time": row["time"][0],
         }
+        
         # Extracting values from tuples/lists
         flat_row["da_segment_iou"] = row["da_segment_result"][0]
         flat_row["da_segment_precision"] = row["da_segment_result"][1]
@@ -158,6 +159,8 @@ def main():
         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
     )
     
+    # Print available attributes in the dataset module
+    print(dir(dataset))
     
     valid_dataset = eval('dataset.' + cfg.DATASET.DATASET)(
         cfg=cfg,
