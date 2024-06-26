@@ -145,8 +145,6 @@ def update_config(cfg, args):
         cfg.DATASET.DATA_FORMAT = 'jpg'
         cfg.DATASET.SELECT_DATA = False
         cfg.DATASET.ORG_IMG_SIZE = [1080, 1920]
-    elif args.dataset == 'BDD100k':
-        cfg.DATASET.DATASET = 'BddDataset'
-        # Assuming default settings for BDD100k are already set
+        _C.DATASET.LABELROOT = 'lib/dataset/carla_ds/labels' #'/home/zwt/bdd/bdd100k/labels/100k'      # the path of det_annotations folder
 
     cfg.freeze()
