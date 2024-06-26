@@ -239,7 +239,7 @@ def main():
             display_df = pd.DataFrame({'epsilon': epsilons})
             for metric in metrics:
                 display_df[metric] = results_df[metric]
-                display_df[f'{metric}_drop'] = percentage_drops[metric].apply(lambda x: f'{x:.2f}%')
+                display_df[f'{metric}_drop'] = FGSM_percentage_drops[metric].apply(lambda x: f'{x:.2f}%')
 
             # Plotting the DataFrame
             fig, ax = plt.subplots(figsize=(12, 6))
@@ -264,18 +264,18 @@ def main():
                 (10, 0.1, 'add'),
                 (10, 0.1, 'set'),
                 (10, 0.1, 'noise'),
-                (20, 0.1, 'add'),
-                (20, 0.1, 'set'),
-                (20, 0.1, 'noise'),
-                (30, 0.1, 'add'),
-                (30, 0.1, 'set'),
-                (30, 0.1, 'noise'),
-                (50, 0.1, 'add'),
-                (50, 0.1, 'set'),
-                (50, 0.1, 'noise'),
-                (100, 0.1, 'add'),
-                (100, 0.1, 'set'),
-                (100, 0.1, 'noise')
+                # (20, 0.1, 'add'),
+                # (20, 0.1, 'set'),
+                # (20, 0.1, 'noise'),
+                # (30, 0.1, 'add'),
+                # (30, 0.1, 'set'),
+                # (30, 0.1, 'noise'),
+                # (50, 0.1, 'add'),
+                # (50, 0.1, 'set'),
+                # (50, 0.1, 'noise'),
+                # (100, 0.1, 'add'),
+                # (100, 0.1, 'set'),
+                # (100, 0.1, 'noise')
             ]
 
             jsma_results_df = run_jsma_experiments(model, valid_loader, device, cfg, criterion, perturbation_params, final_output_dir)
@@ -301,7 +301,7 @@ def main():
                     display_df[f'{metric}_drop'] = percentage_drops[metric].apply(lambda x: f'<span style="color:red">{x:.2f}%</span>')
 
                 # Plotting the DataFrame
-                fig, ax = plt.subplots(figsize=(14, 8))
+                fig, ax = plt.subplots(figsize=(28, 16))
                 ax.axis('tight')
                 ax.axis('off')
 
@@ -310,12 +310,12 @@ def main():
 
                 # Increase font size
                 table.auto_set_font_size(False)
-                table.set_fontsize(14)
+                table.set_fontsize(11)
 
                 # Style the drop columns to be red
-                for (i, j), cell in table.get_celld().items():
-                    if j > 0 and display_df.columns[j].endswith('_drop'):
-                        cell.set_text_props(color='red')
+                # for (i, j), cell in table.get_celld().items():
+                    # if j > 0 and display_df.columns[j].endswith('_drop'):
+                        # cell.set_text_props(color='red')
 
                 # Save the table as an image
                 plt.savefig(f'JSMA_results_{attack_type}.png', bbox_inches='tight', dpi=600)
