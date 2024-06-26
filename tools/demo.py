@@ -43,10 +43,16 @@ transform = transforms.Compose([
 ])
 
 def add_noise(img, noise_level=0.1):
-    """ Add random noise to an image tensor """
     noise = torch.randn(img.size()) * noise_level
     noisy_img = img + noise
-    return torch.clamp(noisy_img, 0, 1)  # Ensure values are in [0, 1] range
+    return torch.clamp(noisy_img, 0, 1)
+
+def fgsm_attack(image, epsilon, data_grad):
+    sign_data_grad = data_grad.sign()
+    perturbed_image = image + epsilon * sign_data_grad
+    perturbed_image = torch.clamp(perturbed_image, 0, 1)
+    return perturbed_image
+
 
 def detect(cfg, opt):
     # Create logger for logging information
@@ -91,13 +97,6 @@ def detect(cfg, opt):
 
     inf_time = AverageMeter()
     nms_time = AverageMeter()
-    
-    # # Process each image or frame in the dataset
-    # for i, (path, img, img_det, vid_cap, shapes) in tqdm(enumerate(dataset), total=len(dataset)):
-    #     img = transform(img).to(device)
-    #     img = img.half() if half else img.float()  # Convert image to appropriate precision
-    #     if img.ndimension() == 3:
-    #         img = img.unsqueeze(0)
     
     # Process each image or frame in the dataset
     for i, (path, img, img_det, vid_cap, shapes) in tqdm(enumerate(dataset), total=len(dataset)):

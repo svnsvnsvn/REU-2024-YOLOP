@@ -3,4 +3,4 @@ from .AutoDriveDataset import AutoDriveDataset
 from .DemoDataset import LoadImages, LoadStreams
 
 #Adding Carla's stuff here:
-# from .Carla import CarlaDataset
+from .carla import CarlaDataset
