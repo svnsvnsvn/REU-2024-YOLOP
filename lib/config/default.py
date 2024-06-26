@@ -141,7 +141,7 @@ def update_config(cfg, args):
         _C.DATASET.DATAROOT = 'lib/dataset/images/carla_imageset'
         cfg.DATASET.DATASET = 'CarlaDataset'
         cfg.DATASET.TRAIN_SET = 'train'
-        cfg.DATASET.TEST_SET = 'val'
+        cfg.DATASET.TEST_SET = '' # was val, but there's no train or val specific images currently
         cfg.DATASET.DATA_FORMAT = 'jpg'
         cfg.DATASET.SELECT_DATA = False
         cfg.DATASET.ORG_IMG_SIZE = [1080, 1920]
