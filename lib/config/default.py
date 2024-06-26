@@ -145,6 +145,6 @@ def update_config(cfg, args):
         cfg.DATASET.DATA_FORMAT = 'jpg'
         cfg.DATASET.SELECT_DATA = False
         cfg.DATASET.ORG_IMG_SIZE = [1080, 1920]
-        _C.DATASET.LABELROOT = 'lib/dataset/carla_ds/labels' #'/home/zwt/bdd/bdd100k/labels/100k'      # the path of det_annotations folder
+        _C.DATASET.LABELROOT = 'lib/dataset/carla_ds/labels/Video_000' #'/home/zwt/bdd/bdd100k/labels/100k'      # the path of det_annotations folder
 
     cfg.freeze()

@@ -28,12 +28,10 @@ class CarlaDataset(AutoDriveDataset):
         gt_db = []
         height, width = self.shapes
 
-        for annot_file in tqdm(os.listdir('lib/dataset/carla_ds/labels/Video_001')):
+        for annot_file in tqdm(os.listdir('lib/dataset/carla_ds/labels/Video_000')):
             print(f"Annotation file: {annot_file}\n")
             label_path = os.path.join('lib/dataset/carla_ds/labels/Video_000/', annot_file).replace(".png", ".json")
             image_path = os.path.join('lib/dataset/carla_ds/images/Video_000/', annot_file).replace(".png", ".jpg")
-
-            print(f'{label_path}')
             
             with open(label_path, 'r') as f:
                 label = json.load(f)
