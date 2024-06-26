@@ -160,7 +160,7 @@ def main():
     )
     
     # Print available attributes in the dataset module
-    print(dir(dataset))
+    # print(dir(dataset))
     
     valid_dataset = eval('dataset.' + cfg.DATASET.DATASET)(
         cfg=cfg,
@@ -215,7 +215,8 @@ def main():
     'll_mIoU_seg': ll_segment_results[2],
     'detect_result': detect_results[2],  # mAP@0.5
     'loss_avg': total_loss,
-}
+    }
+    
     match attack_type:
         case "FGSM":
             # FGSM
@@ -232,7 +233,7 @@ def main():
             
             for metric in metrics:
                 initial_value = normal_metrics[metric]
-                percentage_drops[metric] = results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
+                FGSM_percentage_drops[metric] = results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
 
             # Create DataFrame for Display
             display_df = pd.DataFrame({'epsilon': epsilons})
@@ -247,10 +248,15 @@ def main():
 
             # Create table
             table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
+            
+            # Style the drop columns to be red
+            for (i, j), cell in table.get_celld().items():
+                if j > 0 and display_df.columns[j].endswith('_drop'):
+                    cell.set_text_props(color='red')
 
             # Save the table as an image
-            plt.savefig('FGSM_results.png', bbox_inches='tight', dpi=300)
-            plt.show()
+            plt.savefig('FGSM_results.png', bbox_inches='tight', dpi=600)
+            plt.close(fig)
             
         case "JSMA":
             # JSMA        
@@ -283,19 +289,28 @@ def main():
             # Function to create and save table for each attack type
             def create_and_save_table(attack_type):
                 display_df = jsma_results_df[jsma_results_df['attack_type'] == attack_type].copy()
-                display_df['normal_metrics'] = ''
 
+                # Add normal metrics as the first row
+                normal_metrics_row = normal_metrics.copy()
+                normal_metrics_row['attack_type'] = 'Normal'
+                normal_metrics_row = pd.DataFrame([normal_metrics_row])
+                display_df = pd.concat([normal_metrics_row, display_df], ignore_index=True)
+    
+                # Add percentage drops as columns
                 for metric in ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']:
-                    display_df[metric] = jsma_results_df[metric]
                     display_df[f'{metric}_drop'] = percentage_drops[metric].apply(lambda x: f'<span style="color:red">{x:.2f}%</span>')
 
                 # Plotting the DataFrame
-                fig, ax = plt.subplots(figsize=(12, 6))
+                fig, ax = plt.subplots(figsize=(14, 8))
                 ax.axis('tight')
                 ax.axis('off')
 
                 # Create table
                 table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
+
+                # Increase font size
+                table.auto_set_font_size(False)
+                table.set_fontsize(14)
 
                 # Style the drop columns to be red
                 for (i, j), cell in table.get_celld().items():
@@ -303,7 +318,7 @@ def main():
                         cell.set_text_props(color='red')
 
                 # Save the table as an image
-                plt.savefig(f'JSMA_results_{attack_type}.png', bbox_inches='tight', dpi=300)
+                plt.savefig(f'JSMA_results_{attack_type}.png', bbox_inches='tight', dpi=600)
                 plt.close(fig)
                 
             # Create and save tables for each attack type
