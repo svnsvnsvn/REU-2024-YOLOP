@@ -5,6 +5,7 @@ import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 import cv2
+import random
 from torch.utils.data import DataLoader
 
 from lib.core.evaluate import ConfusionMatrix, SegmentationMetric
@@ -34,61 +35,55 @@ def uap_sgd_yolop(model, valid_loader, device, nb_epoch, eps, criterion, step_de
         torch.Tensor: Adversarial perturbation.
         list: Losses per iteration.
     """
-    if uap_init is None:
-        delta = torch.rand((1, 3, 640, 640), device=device) * 2 * eps - eps
-    else:
-        delta = uap_init.to(device)
-        
-    print(F"The eps {eps}\n")
-    print(F"The stepdecay {step_decay}")
-
-
-    delta.requires_grad = True
-    eps_step = eps * step_decay
+    
 
     losses = []
     
-    for epoch in range(nb_epoch):
-        for batch_i, (img, target, paths, shapes) in tqdm(enumerate(valid_loader), total=len(valid_loader)):
-            img = img.to(device, non_blocking=True)
-            target = [tgt.to(device) for tgt in target]
-            
-            # Apply perturbation
-            # Get shapes 
-            print(f"{img.shape}")
-            print(f"{delta.shape}")
+    model.eval()  # Set model to evaluation mode
 
-                  
-            perturbed_img = img + delta
-            perturbed_img = torch.clamp(perturbed_img, 0, 1)
-            
-            # Forward pass
-            det_out, da_seg_out, ll_seg_out = model(perturbed_img)
-            inf_out, train_out = det_out 
-            
-                
-            total_loss, head_losses = criterion((train_out, da_seg_out, ll_seg_out), target, shapes, model)
-                    
-            losses.append(total_loss.item())
-            model.zero_grad()
-            total_loss.backward()
-            
-            data_grad = delta.grad
-            
-            # Collect the sign of the gradients
-            sign_data_grad = data_grad.sign()
-
-            delta = delta + sign_data_grad * eps_step
-            
-            delta = torch.clamp(delta, -eps, eps)
-            delta.grad.data.zero_()
-
-        # Decay step size
-        eps_step *= step_decay
+    print(f"The nb epochs is {nb_epoch}")
     
-    if layer_name is not None:
-        handle.remove()  # release hook
+    # for epoch in range(nb_epoch):
+    for batch_i, (img, target, paths, shapes) in tqdm(enumerate(valid_loader), total=len(valid_loader)):
         
+        eps_step = eps * step_decay
+
+        img = img.to(device, non_blocking=True)
+        target = [tgt.to(device) for tgt in target]
+        
+        
+        delta = torch.rand((1, 3, 384, 640), device=device)
+        delta.requires_grad = True
+        
+        # Apply perturbation                  
+        perturbed_img = img + delta
+        perturbed_img = torch.clamp(perturbed_img, 0, 1)
+        
+        # Forward pass
+        det_out, da_seg_out, ll_seg_out = model(perturbed_img)
+        inf_out, train_out = det_out 
+        
+        total_loss, head_losses = criterion((train_out, da_seg_out, ll_seg_out), target, shapes, model)
+                
+        losses.append(total_loss.item())
+        
+        model.zero_grad()
+        
+        total_loss.backward()
+                                
+        # Collect the sign of the gradients
+        sign_data_grad = delta.grad.sign()
+        
+        delta = delta + sign_data_grad * eps_step
+        delta = torch.clamp(delta, -eps, eps)
+        # delta.grad.zero()  # Zero out delta gradients
+        
+        if batch_i == 2:
+            break
+
+    # if layer_name is not None:
+    #     handle.remove()  # release hook
+
     return delta.detach(), losses
 
 def validate_uap(epoch, config, val_loader, model, criterion, output_dir, tb_log_dir, perturbed_images, experiment_number, device='cpu'):
@@ -111,6 +106,12 @@ def validate_uap(epoch, config, val_loader, model, criterion, output_dir, tb_log
     nc = 1
     iouv = torch.linspace(0.5, 0.95, 10).to(device)
     niou = iouv.numel()
+    
+    try:
+        import wandb
+    except ImportError:
+        wandb = None
+        log_imgs = 0
 
     seen = 0
     confusion_matrix = ConfusionMatrix(nc=model.nc)
@@ -396,21 +397,32 @@ def validate_uap(epoch, config, val_loader, model, criterion, output_dir, tb_log
 def run_uap_experiments(model, valid_loader, device, config, criterion, uap_params, final_output_directory):
     results = []
     experiment_number = 0
+    
+    print("\n\nRunning the UAP attack...\n")
 
     for nb_epoch, eps, step_decay, y_target, layer_name, beta in uap_params:
-        
-        print(F"EXP The stepdecay {step_decay}")
-        
+                
         experiment_number += 1
-        uap, loss_history = uap_sgd_yolop(model, valid_loader, device, nb_epoch, eps, beta, step_decay, y_target, None, layer_name)
+        uap, loss_history = uap_sgd_yolop(model, valid_loader, device, nb_epoch, eps, criterion, step_decay, beta, y_target, None, layer_name)
+        
+        print(f"Error handling, got here. ")
 
         images = []
+        count = 0
         for batch in valid_loader:
             images.extend(batch[0].numpy())
-            if len(images) >= len(valid_loader.dataset):
+            print(f"Error handling, got here #2. ")
+
+            # if len(images) >= len(valid_loader.dataset):
+            if count == 0:
                 break
 
         perturbed_images = torch.clamp(torch.tensor(images, dtype=torch.float32) + uap.unsqueeze(0), 0, 1)
+        
+        perturbed_images = perturbed_images.squeeze(0)
+
+        
+        print(f"\n\n\nThe shape of perturbed images is {perturbed_images.shape}\n")
 
         da_segment_result, ll_segment_result, detect_result, loss_avg, maps, t = validate_uap(
             epoch=0,

@@ -38,6 +38,8 @@ from bs4 import BeautifulSoup
 import matplotlib.pyplot as plt
 
 def calculate_percentage_drop(initial, current):
+    if initial == 0:
+        return 0.0
     return ((initial - current) / initial) * 100
 
 def flatten_results(df):
@@ -216,6 +218,14 @@ def main():
     'll_mIoU_seg': ll_segment_results[2],
     'detect_result': detect_results[2],  # mAP@0.5
     'loss_avg': total_loss,
+    'da_acc_seg_drop': 0,
+    'da_IoU_seg_drop': 0,
+    'da_mIoU_seg_drop': 0,
+    'll_acc_seg_drop': 0,
+    'll_IoU_seg_drop': 0,
+    'll_mIoU_seg_drop': 0,
+    'detect_result_drop': 0,  
+    'loss_avg_drop': 0
     }
     
     match attack_type:
@@ -381,7 +391,7 @@ def main():
 
                 # Add normal metrics as the first row
                 normal_metrics_row = normal_metrics.copy()
-                normal_metrics_row['attack_type'] = 'Normal'
+                normal_metrics_row['eps'] = '0'
                 normal_metrics_row = pd.DataFrame([normal_metrics_row])
                 display_df = pd.concat([normal_metrics_row, display_df], ignore_index=True)
 
@@ -391,7 +401,9 @@ def main():
 
                 # Add percentage drops next to metrics
                 for metric in metrics:
-                    display_df[f'{metric}_drop'] = UAP_percentage_drops[metric].apply(lambda x: f'{x:.2f}%')
+                    display_df[f'{metric}_drop'] = UAP_percentage_drops[metric].apply(
+                        lambda x: f'{x:.2f}%' if x <= 0 else f'+{abs(x):.2f}%'
+                    )
 
                 # Interleave the metric and drop columns
                 interleaved_columns = []
@@ -399,8 +411,7 @@ def main():
                     interleaved_columns.append(metric)
                     interleaved_columns.append(f'{metric}_drop')
 
-                # Ensure 'attack_type' is the first column
-                interleaved_columns = ['attack_type'] + interleaved_columns
+                interleaved_columns = ['eps'] + interleaved_columns
 
                 # Reorder the columns in display_df
                 display_df = display_df[interleaved_columns]
@@ -413,10 +424,14 @@ def main():
                 # Create table
                 table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
 
-                # Style the drop columns to be red
+                # Style the drop columns to be red for decreases and green for increases
                 for (i, j), cell in table.get_celld().items():
                     if j > 0 and display_df.columns[j].endswith('_drop'):
-                        cell.set_text_props(color='red')
+                        value = display_df.iloc[i, j]
+                        if '+' in value:
+                            cell.set_text_props(color='green')
+                        elif '-' in value or value == '0.00%':
+                            cell.set_text_props(color='red')
 
                 # Increase font size
                 table.auto_set_font_size(False)
