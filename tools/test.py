@@ -79,13 +79,66 @@ def parse_args():
                         help='log directory',
                         type=str,
                         default='runs/')
-    parser.add_argument('--weights', nargs='+', type=str, default='/data2/zwt/wd/YOLOP/runs/BddDataset/detect_and_segbranch_whole/epoch-169.pth', help='model.pth path(s)')
-    parser.add_argument('--conf_thres', type=float, default=0.001, help='object confidence threshold')
-    parser.add_argument('--iou_thres', type=float, default=0.6, help='IOU threshold for NMS')
+    parser.add_argument('--weights',
+                        nargs='+',
+                        type=str,
+                        default='/data2/zwt/wd/YOLOP/runs/BddDataset/detect_and_segbranch_whole/epoch-169.pth',
+                        help ='model.pth path(s)')
+    parser.add_argument('--conf_thres',
+                        type=float,
+                        default=0.001,
+                        help ='object confidence threshold')
+    parser.add_argument('--iou_thres',
+                        type=float,
+                        default=0.6,
+                        help ='IOU threshold for NMS')
     
    # Adding new arguments for dataset and attack type
-    parser.add_argument('--dataset', type=str, choices=['Carla', 'BDD100k'], help='Choice of dataset: Carla or BDD100k', default='BDD100k')
-    parser.add_argument('--attack', type=str, choices=['FGSM', 'JSMA', 'UAP', 'CCP', 'None'], help='Choice of attack: FGSM, JSMA, UAP, CCP, or None', default= 'None')
+    parser.add_argument('--dataset',
+                        type=str,
+                        choices=['Carla', 'BDD100k'],
+                        help ='Choice of dataset: Carla or BDD100k',
+                        default='BDD100k')
+    parser.add_argument('--attack',
+                        type=str,
+                        choices=['FGSM', 'JSMA', 'UAP', 'CCP', 'None'],
+                        help ='Choice of attack: FGSM, JSMA, UAP, CCP, or None',
+                        default= 'None')
+    
+    # New arguments for FGSM
+    parser.add_argument('--fgsm_experiment_mode',
+                        type = int, choices = [0, 1],
+                        help = 'Run with experiment mode? (1 (True): Runs with several pre-generated epsilon values. \n0 (False): Provide your own epsilon value)',
+                        default = 0)
+    parser.add_argument('--epsilon',
+                        type=float,
+                        help='Epsilon value for FGSM attack',
+                        default=0.1)
+    parser.add_argument('--fgsm_attack_type', 
+                        type=str, 
+                        choices=['fgsm', 'fgsm_with_noise', 'iterative_fgsm'],
+                        help ='Type of FGSM attack. Options include: FGSM, FGSM w Noise, and Iterative FGSM',
+                        default='fgsm')
+    
+    # New arguments for JSMA
+    parser.add_argument('--jsma_experiment_mode',
+                        type = int,
+                        choices = [0, 1],
+                        help = 'Run with experiment mode? (1 (True): Runs with several pre-generated parameters (num_pixels, perturbation value, attack type) values. \n0 (False): Provide your own parameters values).', default = 0) 
+    parser.add_argument('--num_pixels',
+                        type=int,
+                        help="The number of pixels to be perturbed after saliency calculation.",
+                        default = 10)
+    parser.add_argument('--jsma_perturbation',
+                        type=int,
+                        help="The number of pixels to be perturbed after saliency calculation.",
+                        default = .1)
+    parser.add_argument('--jsma_attack_type',
+                        type = str,
+                        choices = ["Add", "Set", "Noise"],
+                        help = "Select the type of perturbation to be applied to the highest scoring pixels. Options include add, set, and noise.",
+                        default = "noise"
+                        )
     
     args = parser.parse_args()
     return args
@@ -95,7 +148,6 @@ def main():
     args = parse_args()
     update_config(cfg, args)
     
-    
     # Attack type selection based on argument
     attack_type = args.attack
     
@@ -104,8 +156,7 @@ def main():
         print("None selected. Will run only a normal validation.")
     else:
         print(f"{attack_type} selected\n")
-
-    
+                
 
     # TODO: handle distributed training logger
     # set the logger, tb_log_dir means tensorboard logdir
@@ -231,10 +282,15 @@ def main():
     match attack_type:
         case "FGSM":
             # FGSM
-            epsilons = [.03, .05, .1, .15, .2, .3, .5, .75, .9, 1]  # FGSM attack parameters
+            # FGSM attack parameters
+            if(args.fgsm_experiment_mode == 1):
+                epsilons = [.03, .05, .1, .15, .2, .3, .5, .75, .9, 1]  
+                print(f"\nExperiment mode is {args.fgsm_experiment_mode}, will be using pre-generated epsilon values of {epsilons}")
+            elif(args.fgsm_experiment_mode == 0):
+                epsilons = [args.epsilon]
+                print(f"\nExperiment mode is {args.fgsm_experiment_mode}, will be using your provided epsilon value of {epsilons}")
 
-
-            fgsm_results_df = run_fgsm_experiments(model, valid_loader, device, cfg, criterion, epsilons, final_output_dir)
+            fgsm_results_df = run_fgsm_experiments(model, valid_loader, device, cfg, criterion, epsilons, final_output_dir, args.fgsm_attack_type)
             
             FGSM_percentage_drops = fgsm_results_df.copy()
             
@@ -257,7 +313,8 @@ def main():
                 display_df[metric] = display_df[metric].apply(lambda x: f'{x:.4g}')
 
             # Create DataFrame for Display
-            display_df = pd.DataFrame({'epsilon': epsilons})
+            display_df = fgsm_results_df[fgsm_results_df['epsilon'] == epsilons].copy()
+            
             for metric in metrics:
                 display_df[metric] = fgsm_results_df[metric]
                 display_df[f'{metric}_drop'] = FGSM_percentage_drops[metric].apply(lambda x: f'{x:.2f}%')
@@ -281,26 +338,33 @@ def main():
             
         case "JSMA":
             # JSMA        
-            perturbation_params = [
-                (10, 0.1, 'add'),
-                (10, 0.1, 'set'),
-                (10, 0.1, 'noise'),
-                (20, 0.1, 'add'),
-                (20, 0.1, 'set'),
-                (20, 0.1, 'noise'),
-                (30, 0.1, 'add'),
-                (30, 0.1, 'set'),
-                (30, 0.1, 'noise'),
-                (50, 0.1, 'add'),
-                (50, 0.1, 'set'),
-                (50, 0.1, 'noise'),
-                (100, 0.1, 'add'),
-                (100, 0.1, 'set'),
-                (100, 0.1, 'noise'),
-                (1000, 0.1, 'add'),
-                (1000, 0.1, 'set'),
-                (1000, 0.1, 'noise')
-            ]
+            if args.jsma_experiment_mode == True:
+                perturbation_params = [
+                    (10, 0.1, 'add'),
+                    (10, 0.1, 'set'),
+                    (10, 0.1, 'noise'),
+                    (20, 0.1, 'add'),
+                    (20, 0.1, 'set'),
+                    (20, 0.1, 'noise'),
+                    (30, 0.1, 'add'),
+                    (30, 0.1, 'set'),
+                    (30, 0.1, 'noise'),
+                    (50, 0.1, 'add'),
+                    (50, 0.1, 'set'),
+                    (50, 0.1, 'noise'),
+                    (100, 0.1, 'add'),
+                    (100, 0.1, 'set'),
+                    (100, 0.1, 'noise'),
+                    (1000, 0.1, 'add'),
+                    (1000, 0.1, 'set'),
+                    (1000, 0.1, 'noise')
+                ]
+                
+                print(f"\nExperimentation mode is on. Will run using pre-defined arguments of \n{perturbation_params}.")
+
+            else:
+                perturbation_params = [(args.num_pixels, args.jsma_perturbation, args.jsma_attack_type)]
+                print(f"\nExperimentation mode is NOT on. Will run using provided arguments of \n{perturbation_params}.")
 
             jsma_results_df = run_jsma_experiments(model, valid_loader, device, cfg, criterion, perturbation_params, final_output_dir)
             
@@ -428,9 +492,9 @@ def main():
                 for (i, j), cell in table.get_celld().items():
                     if j > 0 and display_df.columns[j].endswith('_drop'):
                         value = display_df.iloc[i, j]
-                        if '+' in value:
+                        if value < 0:
                             cell.set_text_props(color='green')
-                        elif '-' in value or value == '0.00%':
+                        elif value >= 0:
                             cell.set_text_props(color='red')
 
                 # Increase font size

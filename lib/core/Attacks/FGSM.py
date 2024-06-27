@@ -27,7 +27,7 @@ from lib.utils import plot_img_and_mask, plot_one_box, show_seg_result
 from lib.core.function import AverageMeter
 
 # FGSM         
-def validate_with_fgsm(epoch, config, val_loader, val_dataset, model, criterion, output_dir, tb_log_dir, experiment_number, writer_dict=None, logger=None, device='cpu', rank=-1, epsilon=0.1):
+def validate_with_fgsm(epoch, config, val_loader, val_dataset, model, criterion, output_dir, tb_log_dir, experiment_number, writer_dict=None, logger=None, device='cpu', rank=-1, epsilon=0.1, attack_type = 'fgsm'):
     """
     Validate a model using the FGSM adversarial examples generated from the validation dataset.
     This method is intended to assess model robustness against adversarial attacks by modifying the validation images.
@@ -147,8 +147,15 @@ def validate_with_fgsm(epoch, config, val_loader, val_dataset, model, criterion,
         # Collect gradients
         data_grad = img.grad
 
-        # Call FGSM Attack
-        perturbed_data = fgsm_attack(img, epsilon, data_grad)
+        print(f"\nThe attack type is {attack_type}\n")
+
+        # Proceed with attack method
+        if attack_type == 'fgsm':
+            perturbed_data = fgsm_attack(img, epsilon, data_grad)
+        elif attack_type == 'fgsm_with_noise':
+            perturbed_data = fgsm_attack_with_noise(img, epsilon, data_grad)
+        elif attack_type == 'iterative_fgsm':
+            perturbed_data = iterative_fgsm_attack(img, epsilon, data_grad, alpha=0.01, num_iter=10, model=model, criterion=criterion, target=target, shapes = shapes)
         
         # Evaluate the model with the perturbed images
         with torch.no_grad():
@@ -479,6 +486,8 @@ def fgsm_attack(image, epsilon, data_grad):
     The function assumes that the input image and the gradients are torch tensors and that the operations are performed with PyTorch.
     """
     
+    print(f"\nRunning standard FGSM attack\n")
+    
     # Collect the sign of the gradients
     sign_data_grad = data_grad.sign()
     
@@ -493,14 +502,42 @@ def fgsm_attack(image, epsilon, data_grad):
     
     return perturbed_image
 
+def fgsm_attack_with_noise(image, epsilon, data_grad):
+    print(f"\nRunning FGSM attack with noise\n")
 
-def run_fgsm_experiments(model, valid_loader, device, config, criterion, epsilon_values, final_output_directory):
+    noise = torch.randn_like(image) * epsilon
+    perturbed_image = image + noise
+    perturbed_image = fgsm_attack(perturbed_image, epsilon, data_grad)
+    return perturbed_image
+
+def iterative_fgsm_attack(image, epsilon, data_grad, alpha, num_iter, model, criterion, target, shapes):
+    print(f"\nRunning iterative FGSM\n")
+
+    perturbed_image = image.clone()
+    for _ in range(num_iter):
+        perturbed_image.requires_grad = True
+        
+        det_out, da_seg_out, ll_seg_out = model(perturbed_image)
+        inf_out, train_out = det_out 
+
+        total_loss, head_losses = criterion((train_out, da_seg_out, ll_seg_out), target, shapes, model)
+        model.zero_grad()
+        
+        total_loss.backward()
+        
+        perturbed_image = perturbed_image + alpha * perturbed_image.grad.sign()
+        perturbed_image = torch.clamp(perturbed_image, 0, 1)
+    return perturbed_image
+
+def run_fgsm_experiments(model, valid_loader, device, config, criterion, epsilon_values, final_output_directory, fgsm_attack_type):
     results = []
     experiment_number = 0
+
     
     for epsilon in epsilon_values:
         experiment_number +=1
         print("Epsilon: ", epsilon)
+        
         # Perform FGSM validation for each epsilon value
         da_segment_result, ll_segment_result, detect_result, loss_avg, maps, t = validate_with_fgsm(
             epoch=0,
@@ -513,12 +550,14 @@ def run_fgsm_experiments(model, valid_loader, device, config, criterion, epsilon
             tb_log_dir="log",
             experiment_number=experiment_number,
             device=device,
-            epsilon= epsilon
+            epsilon = epsilon,
+            attack_type= fgsm_attack_type
         )
         
         # Collect results for each epsilon
         results.append({
             "epsilon": epsilon,
+            "FGSM Attack Type": fgsm_attack_type,
             "da_acc_seg": da_segment_result[0],
             "da_IoU_seg": da_segment_result[1],
             "da_mIoU_seg": da_segment_result[2],
