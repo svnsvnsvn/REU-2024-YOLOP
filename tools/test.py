@@ -27,6 +27,8 @@ from lib.core.function import validate
 from lib.core.Attacks.FGSM import run_fgsm_experiments
 from lib.core.Attacks.JSMA import run_jsma_experiments
 from lib.core.Attacks.UAP import run_uap_experiments
+from lib.core.Attacks.CCP import validate_with_color_channel_perturbation
+
 
 from lib.core.general import fitness
 from lib.models import get_net
@@ -171,6 +173,13 @@ def parse_args():
                         help='Batch size for UAP attack',
                         default=12)
     
+    # New Args for CCP 
+    parser.add_argument('--color_channel',
+                    type=str,
+                    choices=['R', 'G', 'B'],
+                    help='Color channel to perturb (R, G, B)',
+                    default='R')
+
     args = parser.parse_args()
     return args
 
@@ -558,6 +567,29 @@ def main():
 
             # Create and save table for UAP attack type
             create_and_save_uap_table()
+        case "CCP":
+            # Color Channel Perturbation
+            color_channel = args.color_channel
+            epsilon = args.epsilon
+            
+            da_segment_results, ll_segment_results, detect_results, total_loss, maps, times = validate_with_color_channel_perturbation(
+                epoch, cfg, valid_loader, valid_dataset, model, criterion,
+                final_output_dir, tb_log_dir, experiment_number=0,
+                writer_dict=writer_dict, logger=logger, device=device,
+                epsilon=epsilon, channel=color_channel
+            )
+            
+            msg = 'Test with Color Channel Perturbation: Loss({loss:.3f})\n' \
+                'Driving area Segment: Acc({da_seg_acc:.3f}) IOU ({da_seg_iou:.3f}) mIOU({da_seg_miou:.3f})\n' \
+                'Lane line Segment: Acc({ll_seg_acc:.3f}) IOU ({ll_seg_iou:.3f}) mIOU({ll_seg_miou:.3f})\n' \
+                'Detect: P({p:.3f}) R({r:.3f}) mAP@0.5({map50:.3f}) mAP@0.5:0.95({map:.3f})\n' \
+                'Time: inference({t_inf:.4f}s/frame) nms({t_nms:.4f}s/frame)'.format(
+                loss=total_loss, da_seg_acc=da_segment_results[0], da_seg_iou=da_segment_results[1], da_seg_miou=da_segment_results[2],
+                ll_seg_acc=ll_segment_results[0], ll_seg_iou=ll_segment_results[1], ll_seg_miou=ll_segment_results[2],
+                p=detect_results[0], r=detect_results[1], map50=detect_results[2], map=detect_results[3],
+                t_inf=times[0], t_nms=times[1])
+            
+            logger.info(msg)
     
     print("Test Finish")
     
