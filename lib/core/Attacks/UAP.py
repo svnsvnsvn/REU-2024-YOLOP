@@ -486,13 +486,11 @@ def run_uap_experiments(model, valid_loader, device, config, criterion, uap_para
         experiment_number += 1
         uap, loss_history = uap_sgd_yolop(model, valid_loader, device, nb_epoch, eps, criterion, step_decay, beta, y_target, None, layer_name)
         
-        print(f"Error handling, got here. ")
 
         images = []
         count = 0
         for batch in valid_loader:
             images.extend(batch[0].numpy())
-            print(f"Error handling, got here #2. ")
 
             # if len(images) >= len(valid_loader.dataset):
             if count == 0:

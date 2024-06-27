@@ -479,7 +479,7 @@ def main():
                 table.set_fontsize(11)
 
                 # Save the table as an image
-                plt.savefig(f'JSMA_results_{attack_type}.png', bbox_inches='tight', dpi=600)
+                plt.savefig(f'JSMA_results_{num_pixels}.png', bbox_inches='tight', dpi=600)
                 plt.close(fig)
                 
             # Create and save tables for each attack type
@@ -543,14 +543,10 @@ def main():
                 # Create table
                 table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
 
-                # Style the drop columns to be red for decreases and green for increases
+                # Style the drop columns to be red
                 for (i, j), cell in table.get_celld().items():
                     if j > 0 and display_df.columns[j].endswith('_drop'):
-                        value = display_df.iloc[i, j]
-                        if value < 0:
-                            cell.set_text_props(color='green')
-                        elif value >= 0:
-                            cell.set_text_props(color='red')
+                        cell.set_text_props(color='red')
 
                 # Increase font size
                 table.auto_set_font_size(False)
