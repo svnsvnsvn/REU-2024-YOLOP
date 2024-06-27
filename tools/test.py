@@ -109,7 +109,7 @@ def parse_args():
     parser.add_argument('--fgsm_experiment_mode',
                         type = int, choices = [0, 1],
                         help = 'Run with experiment mode? (1 (True): Runs with several pre-generated epsilon values. \n0 (False): Provide your own epsilon value)',
-                        default = 0)
+                        default = 1)
     parser.add_argument('--epsilon',
                         type=float,
                         help='Epsilon value for FGSM attack',
@@ -124,7 +124,7 @@ def parse_args():
     parser.add_argument('--jsma_experiment_mode',
                         type = int,
                         choices = [0, 1],
-                        help = 'Run with experiment mode? (1 (True): Runs with several pre-generated parameters (num_pixels, perturbation value, attack type) values. \n0 (False): Provide your own parameters values).', default = 0) 
+                        help = 'Run with experiment mode? (1 (True): Runs with several pre-generated parameters (num_pixels, perturbation value, attack type) values. \n0 (False): Provide your own parameters values).', default = 1) 
     parser.add_argument('--num_pixels',
                         type=int,
                         help="The number of pixels to be perturbed after saliency calculation.",
@@ -139,6 +139,37 @@ def parse_args():
                         help = "Select the type of perturbation to be applied to the highest scoring pixels. Options include add, set, and noise.",
                         default = "noise"
                         )
+    
+    # New arguments for UAP
+    parser.add_argument('--uap_experiment_mode',
+                        type=int, 
+                        choices=[0, 1],
+                        help='Run with experiment mode? (1 (True): Runs with several pre-generated parameter values. \n0 (False): Provide your own parameter values)',
+                        default = 1)
+    parser.add_argument('--uap_max_iterations',
+                        type=int,
+                        help='Maximum number of iterations for UAP attack',
+                        default=10)
+    parser.add_argument('--uap_eps',
+                        type=float,
+                        help='Epsilon value for UAP attack',
+                        default=0.03)
+    parser.add_argument('--uap_delta',
+                        type=float,
+                        help='Delta value for UAP attack',
+                        default=0.8)
+    parser.add_argument('--uap_num_classes',
+                        type=int,
+                        help='Number of classes for UAP attack',
+                        default=None)
+    parser.add_argument('--uap_targeted',
+                        type=bool,
+                        help='Whether the UAP attack is targeted or not',
+                        default=False)
+    parser.add_argument('--uap_batch_size',
+                        type=int,
+                        help='Batch size for UAP attack',
+                        default=12)
     
     args = parser.parse_args()
     return args
@@ -268,17 +299,10 @@ def main():
     'll_IoU_seg': ll_segment_results[1],
     'll_mIoU_seg': ll_segment_results[2],
     'detect_result': detect_results[2],  # mAP@0.5
-    'loss_avg': total_loss,
-    'da_acc_seg_drop': 0,
-    'da_IoU_seg_drop': 0,
-    'da_mIoU_seg_drop': 0,
-    'll_acc_seg_drop': 0,
-    'll_IoU_seg_drop': 0,
-    'll_mIoU_seg_drop': 0,
-    'detect_result_drop': 0,  
-    'loss_avg_drop': 0
+    'loss_avg': total_loss
+
     }
-    
+        
     match attack_type:
         case "FGSM":
             # FGSM
@@ -294,43 +318,63 @@ def main():
             
             FGSM_percentage_drops = fgsm_results_df.copy()
             
-            fgsm_results_df['epsilon'] = epsilons
-
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
-            
+                
             for metric in metrics:
                 initial_value = normal_metrics[metric]
                 FGSM_percentage_drops[metric] = fgsm_results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
-            
+
+            display_df = fgsm_results_df.copy()
+                                
             # Add normal metrics as the first row
             normal_metrics_row = normal_metrics.copy()
-            normal_metrics_row['epsilon'] = '0'
-            normal_metrics_row = pd.DataFrame([normal_metrics_row])
-            display_df = pd.concat([normal_metrics_row, display_df], ignore_index=True)
+            normal_metrics_row['epsilon'] = 0
+            normal_metrics_row['da_acc_seg_drop'] = 0
+            normal_metrics_row['da_IoU_seg_drop'] = 0
+            normal_metrics_row['da_mIoU_seg_drop'] = 0
+            normal_metrics_row['ll_acc_seg_drop'] = 0
+            normal_metrics_row['ll_IoU_seg_drop'] = 0
+            normal_metrics_row['ll_mIoU_seg_drop'] = 0
+            normal_metrics_row['detect_result_drop'] = 0
+            normal_metrics_row['loss_avg_drop'] = 0
+            normal_metrics_row_df = pd.DataFrame([normal_metrics_row])
+            display_df = pd.concat([normal_metrics_row_df, display_df], ignore_index=True)
 
             # Round each metric to 4 significant figures
-            for metric in ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']:
+            for metric in metrics:
                 display_df[metric] = display_df[metric].apply(lambda x: f'{x:.4g}')
 
-            # Create DataFrame for Display
-            display_df = fgsm_results_df[fgsm_results_df['epsilon'] == epsilons].copy()
-            
             for metric in metrics:
-                display_df[metric] = fgsm_results_df[metric]
                 display_df[f'{metric}_drop'] = FGSM_percentage_drops[metric].apply(lambda x: f'{x:.2f}%')
 
+            # Interleave the metric and drop columns
+            interleaved_columns = []
+            for metric in metrics:
+                interleaved_columns.append(metric)
+                interleaved_columns.append(f'{metric}_drop')
+
+            # Ensure 'epsilon' is the first column
+            interleaved_columns = ['epsilon'] + interleaved_columns
+
+            # Reorder the columns in display_df
+            display_df = display_df[interleaved_columns]
+
             # Plotting the DataFrame
-            fig, ax = plt.subplots(figsize=(12, 6))
+            fig, ax = plt.subplots(figsize=(28, 16))
             ax.axis('tight')
             ax.axis('off')
 
             # Create table
             table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
-            
+
             # Style the drop columns to be red
             for (i, j), cell in table.get_celld().items():
                 if j > 0 and display_df.columns[j].endswith('_drop'):
                     cell.set_text_props(color='red')
+
+            # Increase font size
+            table.auto_set_font_size(False)
+            table.set_fontsize(11)
 
             # Save the table as an image
             plt.savefig('FGSM_results.png', bbox_inches='tight', dpi=600)
@@ -383,6 +427,14 @@ def main():
                 # Add normal metrics as the first row
                 normal_metrics_row = normal_metrics.copy()
                 normal_metrics_row['num_pixels'] = '0'
+                normal_metrics_row['da_acc_seg_drop'] = 0
+                normal_metrics_row['da_IoU_seg_drop'] = 0
+                normal_metrics_row['da_mIoU_seg_drop'] = 0
+                normal_metrics_row['ll_acc_seg_drop'] = 0
+                normal_metrics_row['ll_IoU_seg_drop'] = 0
+                normal_metrics_row['ll_mIoU_seg_drop'] = 0
+                normal_metrics_row['detect_result_drop'] = 0
+                normal_metrics_row['loss_avg_drop'] = 0
                 normal_metrics_row = pd.DataFrame([normal_metrics_row])
                 display_df = pd.concat([normal_metrics_row, display_df], ignore_index=True)
 
