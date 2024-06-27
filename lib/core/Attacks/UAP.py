@@ -154,7 +154,7 @@ def uap_sgd_yolop(model, valid_loader, device, nb_epoch, eps, criterion, step_de
             # Clip perturbation to be within [-eps, eps]
             uap.data = torch.clamp(uap.data, -eps, eps)
             
-            if batch_i == 10:
+            if batch_i == 0:
                 break
         
         scheduler.step()

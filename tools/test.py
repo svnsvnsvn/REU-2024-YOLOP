@@ -337,11 +337,14 @@ def main():
             normal_metrics_row['ll_mIoU_seg_drop'] = 0
             normal_metrics_row['detect_result_drop'] = 0
             normal_metrics_row['loss_avg_drop'] = 0
+            
             normal_metrics_row_df = pd.DataFrame([normal_metrics_row])
-            display_df = pd.concat([normal_metrics_row_df, display_df], ignore_index=True)
+            display_df = pd.concat([normal_metrics_row_df, display_df]) #, ignore_index=True
+
 
             # Round each metric to 4 significant figures
             for metric in metrics:
+                display_df[metric] = pd.to_numeric(display_df[metric], errors='coerce')
                 display_df[metric] = display_df[metric].apply(lambda x: f'{x:.4g}')
 
             for metric in metrics:
@@ -436,7 +439,7 @@ def main():
                 normal_metrics_row['detect_result_drop'] = 0
                 normal_metrics_row['loss_avg_drop'] = 0
                 normal_metrics_row = pd.DataFrame([normal_metrics_row])
-                display_df = pd.concat([normal_metrics_row, display_df], ignore_index=True)
+                display_df = pd.concat([normal_metrics_row, display_df])
 
                 # Round each metric to 4 significant figures
                 for metric in metrics:
@@ -509,7 +512,7 @@ def main():
                 normal_metrics_row = normal_metrics.copy()
                 normal_metrics_row['eps'] = '0'
                 normal_metrics_row = pd.DataFrame([normal_metrics_row])
-                display_df = pd.concat([normal_metrics_row, display_df], ignore_index=True)
+                display_df = pd.concat([normal_metrics_row, display_df])
 
                 # Round each metric to 4 significant figures
                 for metric in metrics:

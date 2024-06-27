@@ -380,7 +380,7 @@ def validate_with_fgsm(epoch, config, val_loader, val_dataset, model, criterion,
             #Thread(target=plot_images, args=(img, output_to_target(output), paths, f, names), daemon=True).start()
             
         
-        if batch_i == 4:
+        if batch_i == 0:
             break
 
     # Compute statistics
