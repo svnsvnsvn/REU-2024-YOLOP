@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+!/usr/bin/env python
 
 
 
@@ -170,7 +170,7 @@ def main(args):
             print("Preparing to display images...")
             
             ''' Display Original Image '''
-            plt.imshow(cv2.cvtColor(args.input_image, cv2.COLOR_BGR2RGB))
+            plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
             plt.title('Original Image')
             plt.axis('off')
             plt.show()
