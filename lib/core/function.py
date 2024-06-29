@@ -2,14 +2,10 @@ import time
 from lib.core.evaluate import ConfusionMatrix,SegmentationMetric
 from lib.core.general import non_max_suppression,check_img_size,scale_coords,xyxy2xywh,xywh2xyxy,box_iou,coco80_to_coco91_class,plot_images,ap_per_class,output_to_target
 from lib.utils.utils import time_synchronized
-from lib.utils import plot_img_and_mask,plot_one_box,show_seg_result
+from lib.utils import plot_one_box,show_seg_result
 import torch
-from threading import Thread
 import numpy as np
-from PIL import Image
-from torchvision import transforms
-import matplotlib.pyplot as plt
-import tensorflow as tf
+import pandas as pd
 
 from pathlib import Path
 import json
@@ -19,6 +15,11 @@ import os
 import math
 from torch.cuda import amp
 from tqdm import tqdm
+
+from lib.core.Attacks.FGSM import fgsm_attack, fgsm_attack_with_noise, iterative_fgsm_attack
+from lib.core.Attacks.JSMA import calculate_saliency, find_and_perturb_highest_scoring_pixels
+from lib.core.Attacks.UAP import uap_sgd_yolop
+from lib.core.Attacks.CCP import color_channel_perturbation
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -131,42 +132,23 @@ def train(cfg, train_loader, model, criterion, optimizer, scaler, epoch, num_bat
                 # writer.add_scalar('train_acc', acc.val, global_steps)
                 writer_dict['train_global_steps'] = global_steps + 1
 
-def validate(epoch,config, val_loader, val_dataset, model, criterion, output_dir,
-tb_log_dir, writer_dict=None, logger=None, device='cpu', rank=-1):
-    """
-    validata
-
-    Inputs:
-    - config: configurations 
-    - train_loader: loder for data
-    - model: 
-    - criterion: (function) calculate all the loss, return 
-    - writer_dict: 
-
-    Return:
-    None
-    """
-    # setting
+def validate(epoch, config, val_loader, val_dataset, model, criterion, output_dir, tb_log_dir, perturbed_images=None, experiment_number=0, writer_dict=None, logger=None, device='cpu', rank=-1, epsilon=0.1, attack_type='none', channel='R'):
     max_stride = 32
     weights = None
-
-    save_dir = output_dir + os.path.sep + 'visualization'
+    save_dir = os.path.join(output_dir, f'visualization_exp_{experiment_number}')
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
-
-    # print(save_dir)
-    _, imgsz = [check_img_size(x, s=max_stride) for x in config.MODEL.IMAGE_SIZE] #imgsz is multiple of max_stride
-    batch_size = config.TRAIN.BATCH_SIZE_PER_GPU * len(config.GPUS)
+    _, imgsz = [check_img_size(x, s=max_stride) for x in config.MODEL.IMAGE_SIZE]
     test_batch_size = config.TEST.BATCH_SIZE_PER_GPU * len(config.GPUS)
+    batch_size = config.TRAIN.BATCH_SIZE_PER_GPU * len(config.GPUS)
     training = False
-    is_coco = False #is coco dataset
-    save_conf=False # save auto-label confidences
-    verbose=False
-    save_hybrid=False
-    log_imgs,wandb = min(16,100), None
-
+    is_coco = False
+    save_conf = False
+    verbose = False
+    save_hybrid = False
+    log_imgs, wandb = min(16, 100), None
     nc = 1
-    iouv = torch.linspace(0.5,0.95,10).to(device)     #iou vector for mAP@0.5:0.95
+    iouv = torch.linspace(0.5, 0.95, 10).to(device)
     niou = iouv.numel()
 
     try:
@@ -175,60 +157,72 @@ tb_log_dir, writer_dict=None, logger=None, device='cpu', rank=-1):
         wandb = None
         log_imgs = 0
 
-    seen =  0 
-    confusion_matrix = ConfusionMatrix(nc=model.nc) #detector confusion matrix
-    da_metric = SegmentationMetric(config.num_seg_class) #segment confusion matrix    
-    ll_metric = SegmentationMetric(2) #segment confusion matrix
-
+    seen = 0
+    confusion_matrix = ConfusionMatrix(nc=model.nc)
+    da_metric = SegmentationMetric(config.num_seg_class)
+    ll_metric = SegmentationMetric(2)
     names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}
     colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
     coco91class = coco80_to_coco91_class()
-    
     s = ('%20s' + '%12s' * 6) % ('Class', 'Images', 'Targets', 'P', 'R', 'mAP@.5', 'mAP@.5:.95')
     p, r, f1, mp, mr, map50, map, t_inf, t_nms = 0., 0., 0., 0., 0., 0., 0., 0., 0.
-    
     losses = AverageMeter()
-
     da_acc_seg = AverageMeter()
     da_IoU_seg = AverageMeter()
     da_mIoU_seg = AverageMeter()
-
     ll_acc_seg = AverageMeter()
     ll_IoU_seg = AverageMeter()
     ll_mIoU_seg = AverageMeter()
-
     T_inf = AverageMeter()
     T_nms = AverageMeter()
 
-    # switch to evaluation mode
     model.eval()
     jdict, stats, ap, ap_class, wandb_images = [], [], [], [], []
-    
+
     for batch_i, (img, target, paths, shapes) in tqdm(enumerate(val_loader), total=len(val_loader)):
         if not config.DEBUG:
             img = img.to(device, non_blocking=True)
-            # print(f"img: {img.shape}")
-            assign_target = []
-            for tgt in target:
-                assign_target.append(tgt.to(device))
+            assign_target = [tgt.to(device) for tgt in target]
             target = assign_target
-            nb, _, height, width = img.shape    #batch size, channel, height, width
+            nb, _, height, width = img.shape
+
+        if attack_type != 'none':
+            img.requires_grad = True
+            det_out, da_seg_out, ll_seg_out = model(img)
+            inf_out, train_out = det_out
+            total_loss, head_losses = criterion((train_out, da_seg_out, ll_seg_out), target, shapes, model)
+            losses.update(total_loss.item(), img.size(0))
+            total_loss.backward()
+            data_grad = img.grad
+
+            if attack_type == 'fgsm':
+                perturbed_data = fgsm_attack(img, epsilon, data_grad)
+            elif attack_type == 'fgsm_with_noise':
+                perturbed_data = fgsm_attack_with_noise(img, epsilon, data_grad)
+            elif attack_type == 'iterative_fgsm':
+                perturbed_data = iterative_fgsm_attack(img, epsilon, data_grad, alpha=0.01, num_iter=10, model=model, criterion=criterion, target=target, shapes=shapes)
+            elif attack_type == 'color_channel':
+                perturbed_data = color_channel_perturbation(img, epsilon, data_grad, channel)
+            elif attack_type == 'uap':
+                perturbed_data = perturbed_images.to(device, non_blocking=True)
+            else:
+                perturbed_data = img
+
+            img = perturbed_data
 
         with torch.no_grad():
-            
-            
             pad_w, pad_h = shapes[0][1][1]
             pad_w = int(pad_w)
             pad_h = int(pad_h)
             ratio = shapes[0][1][0][0]
 
             t = time_synchronized()
-            det_out, da_seg_out, ll_seg_out = model(img)
+            det_out, da_seg_out, ll_seg_out= model(img)
             t_inf = time_synchronized() - t
             if batch_i > 0:
                 T_inf.update(t_inf/img.size(0),img.size(0))
 
-            inf_out, train_out = det_out
+            inf_out,train_out = det_out
 
             #driving area segment evaluation
             _,da_predict=torch.max(da_seg_out, 1)
@@ -262,7 +256,7 @@ tb_log_dir, writer_dict=None, logger=None, device='cpu', rank=-1):
             ll_IoU_seg.update(ll_IoU,img.size(0))
             ll_mIoU_seg.update(ll_mIoU,img.size(0))
             
-            total_loss, head_losses = criterion((train_out,da_seg_out, ll_seg_out), target, shapes, model)   # Compute loss
+            total_loss, head_losses = criterion((train_out,da_seg_out, ll_seg_out), target, shapes,model)   #Compute loss
             losses.update(total_loss.item(), img.size(0))
 
             #NMS
@@ -336,10 +330,7 @@ tb_log_dir, writer_dict=None, logger=None, device='cpu', rank=-1):
                             xyxy = (x1,y1,x2,y2)
                             plot_one_box(xyxy, img_gt , label=label_det_gt, color=colors[int(cls)], line_thickness=3)
                         cv2.imwrite(save_dir+"/batch_{}_{}_det_gt.png".format(epoch,i),img_gt)
-
-        # Statistics per image
-        # output([xyxy,conf,cls])
-        # target[0] ([img_id,cls,xyxy])
+        
         for si, pred in enumerate(output):
             labels = target[0][target[0][:, 0] == si, 1:]     # all object in one image 
             nl = len(labels)    # num of object
@@ -515,24 +506,167 @@ tb_log_dir, writer_dict=None, logger=None, device='cpu', rank=-1):
     t = [T_inf.avg, T_nms.avg]
     
     return da_segment_result, ll_segment_result, detect_result, losses.avg, maps, t
-    # Ensure the save directory exists
-    if not os.path.exists(save_directory):
-        os.makedirs(save_directory)
-        
-        
+
     
-    # Loop through each saliency map and save
-    for index, saliency in enumerate(saliency_maps):
-        plt.figure(figsize=(6, 6))
-        plt.imshow(saliency, cmap='hot')
-        plt.colorbar()
-        plt.axis('off')
+def run_fgsm_experiments(model, valid_loader, device, config, criterion, epsilon_values, final_output_directory, fgsm_attack_type):
+    results = []
+    experiment_number = 0
+
+
+    for epsilon in epsilon_values:
+        experiment_number +=1
+        print("Epsilon: ", epsilon)
         
-        # Add title if labels are provided, otherwise use the index
-        title = f'Saliency Map {index}'
-        plt.title(title)
+        # Perform FGSM validation for each epsilon value
+        da_segment_result, ll_segment_result, detect_result, loss_avg, maps, t = validate(
+            epoch=0,
+            config=config,
+            val_loader=valid_loader,
+            val_dataset=valid_loader.dataset,
+            model=model,
+            criterion=criterion,
+            output_dir=final_output_directory,
+            tb_log_dir="log",
+            experiment_number=experiment_number,
+            device=device,
+            epsilon=epsilon,
+            attack_type=fgsm_attack_type
+        )
         
-        # Save the figure
-        save_path = os.path.join(save_directory, f'saliency_map_{index}.png')
-        plt.savefig(save_path, bbox_inches='tight')
-        plt.close()  # Close the figure to free memory
+        # Collect results for each epsilon
+        results.append({
+            "epsilon": epsilon,
+            "FGSM Attack Type": fgsm_attack_type,
+            "da_acc_seg": da_segment_result[0],
+            "da_IoU_seg": da_segment_result[1],
+            "da_mIoU_seg": da_segment_result[2],
+            "ll_acc_seg": ll_segment_result[0],
+            "ll_IoU_seg": ll_segment_result[1],
+            "ll_mIoU_seg": ll_segment_result[2],
+            "detect_result": detect_result,
+            "loss_avg": loss_avg,
+            # "maps": maps,
+            "time": t
+        })
+
+    return pd.DataFrame(results)
+
+def run_jsma_experiments(model, valid_loader, device, config, criterion, perturbation_params, final_output_directory):
+    results = []
+    experiment_number = 0
+
+    for num_pixels, perturb_value, attack_type in perturbation_params:
+        experiment_number+=1
+        # Calculate saliency maps
+        saliency_maps = calculate_saliency(model, valid_loader, device, config, criterion)
+        
+        # Perturb images
+        # Extract images from the data loader
+        images = []
+        for batch in valid_loader:
+            images.extend(batch[0].numpy())
+            if 0 == 0 :
+                print("Breaking...")
+                break
+            
+        perturbed_images, _ = find_and_perturb_highest_scoring_pixels(
+            images, saliency_maps, num_pixels, perturb_value, perturbation_type=attack_type
+        )
+
+        # Validate the model with perturbed images
+        da_segment_result, ll_segment_result, detect_result, loss_avg, maps, t = validate(
+            epoch=0,
+            config=config,
+            val_loader=valid_loader,
+            val_dataset=valid_loader.dataset,
+            model=model,
+            criterion=criterion,
+            output_dir=final_output_directory,
+            tb_log_dir="log",
+            perturbed_images=perturbed_images,
+            experiment_number=experiment_number,
+            device=device,
+            attack_type='jsma'
+        )
+
+        # Store the results
+        results.append({
+            "num_pixels": num_pixels,
+            "perturb_value": perturb_value,
+            "attack_type": attack_type,
+            "da_acc_seg": da_segment_result[0],
+            "da_IoU_seg": da_segment_result[1],
+            "da_mIoU_seg": da_segment_result[2],
+            "ll_acc_seg": ll_segment_result[0],
+            "ll_IoU_seg": ll_segment_result[1],
+            "ll_mIoU_seg": ll_segment_result[2],
+            # "detect_result": detect_result,
+            "loss_avg": loss_avg,
+            # "maps": maps,
+            # "time": t
+        })
+
+    return pd.DataFrame(results)
+
+def run_uap_experiments(model, valid_loader, device, config, criterion, uap_params, final_output_directory):
+    results = []
+    experiment_number = 0
+    
+    print("\n\nRunning the UAP attack...\n")
+
+    for nb_epoch, eps, step_decay, y_target, layer_name, beta in uap_params:
+                
+        experiment_number += 1
+        uap, loss_history = uap_sgd_yolop(model, valid_loader, device, nb_epoch, eps, criterion, step_decay, beta, y_target, None, layer_name)
+        
+
+        images = []
+        count = 0
+        for batch in valid_loader:
+            images.extend(batch[0].numpy())
+
+            # if len(images) >= len(valid_loader.dataset):
+            if count == 0:
+                break
+
+        perturbed_images = torch.clamp(torch.tensor(images, dtype=torch.float32) + uap.unsqueeze(0), 0, 1)
+        
+        perturbed_images = perturbed_images.squeeze(0)
+
+        
+        print(f"\n\n\nThe shape of perturbed images is {perturbed_images.shape}\n")
+
+
+        
+        da_segment_result, ll_segment_result, detect_result, loss_avg, maps, t = validate(
+            epoch=0,
+            config=config,
+            val_loader=valid_loader,
+            val_dataset=valid_loader.dataset,
+            model=model,
+            criterion=criterion,
+            output_dir=final_output_directory,
+            tb_log_dir="log",
+            experiment_number=experiment_number,
+            device=device,
+            perturbed_images=perturbed_images,
+            attack_type='uap'
+        )
+
+        results.append({
+            "nb_epoch": nb_epoch,
+            "eps": eps,
+            "step_decay": step_decay,
+            "y_target": y_target,
+            "layer_name": layer_name,
+            "beta": beta,
+            "da_acc_seg": da_segment_result[0],
+            "da_IoU_seg": da_segment_result[1],
+            "da_mIoU_seg": da_segment_result[2],
+            "ll_acc_seg": ll_segment_result[0],
+            "ll_IoU_seg": ll_segment_result[1],
+            "ll_mIoU_seg": ll_segment_result[2],
+            "loss_avg": loss_avg,
+        })
+
+    return pd.DataFrame(results)

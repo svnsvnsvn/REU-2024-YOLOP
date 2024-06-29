@@ -7,9 +7,10 @@ import numpy as np
 import cv2
 import json
 from lib.core.evaluate import ConfusionMatrix, SegmentationMetric
-from lib.core.general import non_max_suppression, check_img_size, scale_coords, xyxy2xywh, xywh2xyxy, box_iou, coco80_to_coco91_class, plot_images, ap_per_class, output_to_target
+from lib.core.general import non_max_suppression,check_img_size,scale_coords,xyxy2xywh,xywh2xyxy,box_iou,coco80_to_coco91_class,plot_images,ap_per_class,output_to_target
+
 from lib.utils.utils import time_synchronized
-from lib.core.function import AverageMeter
+# from lib.core.function import AverageMeter
 from lib.utils import plot_one_box, show_seg_result
 
 def color_channel_perturbation(image, epsilon, data_grad, channel='R'):

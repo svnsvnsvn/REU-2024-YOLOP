@@ -21,12 +21,9 @@ import lib.dataset as dataset
 from lib.config import cfg
 from lib.config import update_config
 from lib.core.loss import get_loss
-from lib.core.function import validate
+from lib.core.function import validate, run_fgsm_experiments
 
 # Attacks
-from lib.core.Attacks.FGSM import run_fgsm_experiments
-from lib.core.Attacks.JSMA import run_jsma_experiments
-from lib.core.Attacks.UAP import run_uap_experiments
 from lib.core.Attacks.CCP import validate_with_color_channel_perturbation
 
 
