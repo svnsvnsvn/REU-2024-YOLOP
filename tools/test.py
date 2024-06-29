@@ -21,11 +21,7 @@ import lib.dataset as dataset
 from lib.config import cfg
 from lib.config import update_config
 from lib.core.loss import get_loss
-from lib.core.function import validate, run_fgsm_experiments, run_jsma_experiments, run_uap_experiments
-
-# Attacks
-from lib.core.Attacks.CCP import validate_with_color_channel_perturbation
-
+from lib.core.function import validate, run_fgsm_experiments, run_jsma_experiments, run_uap_experiments, run_ccp_experiments
 
 from lib.core.general import fitness
 from lib.models import get_net
@@ -104,14 +100,21 @@ def parse_args():
                         help ='Choice of attack: FGSM, JSMA, UAP, CCP, or None',
                         default= 'None')
     
-    # New arguments for FGSM
-    parser.add_argument('--fgsm_experiment_mode',
+    parser.add_argument('--experiment_mode',
                         type = int, choices = [0, 1],
-                        help = 'Run with experiment mode? (1 (True): Runs with several pre-generated epsilon values. \n0 (False): Provide your own epsilon value)',
+                        help= 'Run with experiment mode? (1 (True): Runs with several pre-generated values. '
+                          '0 (False): Provide your own parameters. FGSM: epsilon, attack type; '
+                          'JSMA: num_pixels, perturbation value, attack type; '
+                          'UAP: max_iterations, epsilon, delta, num_classes, targeted, batch_size; '
+                          'CCP: epsilon, color_channel)',
                         default = 1)
+    
+    
+    
+    # New arguments for FGSM
     parser.add_argument('--epsilon',
                         type=float,
-                        help='Epsilon value for FGSM attack',
+                        help='Epsilon value for FGSM or CCP attack',
                         default=0.1)
     parser.add_argument('--fgsm_attack_type', 
                         type=str, 
@@ -120,10 +123,6 @@ def parse_args():
                         default='fgsm')
     
     # New arguments for JSMA
-    parser.add_argument('--jsma_experiment_mode',
-                        type = int,
-                        choices = [0, 1],
-                        help = 'Run with experiment mode? (1 (True): Runs with several pre-generated parameters (num_pixels, perturbation value, attack type) values. \n0 (False): Provide your own parameters values).', default = 1) 
     parser.add_argument('--num_pixels',
                         type=int,
                         help="The number of pixels to be perturbed after saliency calculation.",
@@ -140,11 +139,6 @@ def parse_args():
                         )
     
     # New arguments for UAP
-    parser.add_argument('--uap_experiment_mode',
-                        type=int, 
-                        choices=[0, 1],
-                        help='Run with experiment mode? (1 (True): Runs with several pre-generated parameter values. \n0 (False): Provide your own parameter values)',
-                        default = 1)
     parser.add_argument('--uap_max_iterations',
                         type=int,
                         help='Maximum number of iterations for UAP attack',
@@ -168,7 +162,7 @@ def parse_args():
     parser.add_argument('--uap_batch_size',
                         type=int,
                         help='Batch size for UAP attack',
-                        default=12)
+                        default=6)
     
     # New Args for CCP 
     parser.add_argument('--color_channel',
@@ -313,12 +307,12 @@ def main():
         case "FGSM":
             # FGSM
             # FGSM attack parameters
-            if(args.fgsm_experiment_mode == 1):
+            if(args.experiment_mode == 1):
                 epsilons = [.03, .05, .1, .15, .2, .3, .5, .75, .9, 1]  
-                print(f"\nExperiment mode is {args.fgsm_experiment_mode}, will be using pre-generated epsilon values of {epsilons}")
-            elif(args.fgsm_experiment_mode == 0):
+                print(f"\nExperiment mode is {args.experiment_mode}, will be using pre-generated epsilon values of {epsilons}")
+            elif(args.experiment_mode == 0):
                 epsilons = [args.epsilon]
-                print(f"\nExperiment mode is {args.fgsm_experiment_mode}, will be using your provided epsilon value of {epsilons}")
+                print(f"\nExperiment mode is {args.experiment_mode}, will be using your provided epsilon value of {epsilons}")
 
             fgsm_results_df = run_fgsm_experiments(model, valid_loader, device, cfg, criterion, epsilons, final_output_dir, args.fgsm_attack_type)
             
@@ -391,7 +385,7 @@ def main():
             
         case "JSMA":
             # JSMA        
-            if args.jsma_experiment_mode == True:
+            if args.experiment_mode == True:
                 perturbation_params = [
                     (10, 0.1, 'add'),
                     (10, 0.1, 'set'),
@@ -493,13 +487,20 @@ def main():
                 create_and_save_table(num_pixels)
         case "UAP":
             # UAP
-            uap_params = [
-                (10, 0.03, 0.8, None, None, 12),
-                (10, 0.05, 0.8, None, None, 12),
-                (10, 0.1, 0.8, None, None, 12),
-                # Add more parameter sets as needed
-            ]
-
+            if args.experiment_mode == True:
+                uap_params = [
+                    (10, 0.03, 0.8, None, None, 12),
+                    (10, 0.05, 0.8, None, None, 12),
+                    (10, 0.1, 0.8, None, None, 12),
+                    # Add more parameter sets as needed
+                ]
+                print(f"\nExperimentation mode is on. Will run using pre-defined arguments of \n{uap_params}.")
+            else:
+                uap_params = [
+                    (args.uap_max_iterations, args.uap_eps, args.uap_delta, args.uap_num_classes, args.uap_targeted, args.uap_batch_size)
+                ]
+                print(f"\nExperimentation mode is NOT on. Will run using provided arguments of \n{uap_params}.")
+                
             uap_results_df = run_uap_experiments(model, valid_loader, device, cfg, criterion, uap_params, final_output_dir)
 
             UAP_percentage_drops = uap_results_df.copy()
@@ -566,28 +567,99 @@ def main():
             create_and_save_uap_table()
         case "CCP":
             # Color Channel Perturbation
-            color_channel = args.color_channel
-            epsilon = args.epsilon
+            if args.experiment_mode == True:
+                ccp_params = [
+                    (0.01, 'R'),
+                    (0.03, 'R'),
+                    (0.05, 'R'),
+                    (0.01, 'G'),
+                    (0.03, 'G'),
+                    (0.05, 'G'),
+                    (0.01, 'B'),
+                    (0.03, 'B'),
+                    (0.05, 'B'),
+                    # Add more parameter sets as needed
+                ]
+                print(f"\nExperimentation mode is on. Will run using pre-defined arguments of \n{ccp_params}.")
+            else:
+                ccp_params = [
+                    (args.args.color_channel, args.epsilon,)
+                ]
+                print(f"\nExperimentation mode is NOT on. Will run using provided arguments of \n{ccp_params}.")
+
+            # Run CCP Experiments
+            ccp_results_df = run_ccp_experiments(model, valid_loader, device, cfg, criterion, ccp_params[0], ccp_params[1], final_output_dir)
             
-            da_segment_results, ll_segment_results, detect_results, total_loss, maps, times = validate_with_color_channel_perturbation(
-                epoch, cfg, valid_loader, valid_dataset, model, criterion,
-                final_output_dir, tb_log_dir, experiment_number=0,
-                writer_dict=writer_dict, logger=logger, device=device,
-                epsilon=epsilon, channel=color_channel
-            )
-            
-            msg = 'Test with Color Channel Perturbation: Loss({loss:.3f})\n' \
-                'Driving area Segment: Acc({da_seg_acc:.3f}) IOU ({da_seg_iou:.3f}) mIOU({da_seg_miou:.3f})\n' \
-                'Lane line Segment: Acc({ll_seg_acc:.3f}) IOU ({ll_seg_iou:.3f}) mIOU({ll_seg_miou:.3f})\n' \
-                'Detect: P({p:.3f}) R({r:.3f}) mAP@0.5({map50:.3f}) mAP@0.5:0.95({map:.3f})\n' \
-                'Time: inference({t_inf:.4f}s/frame) nms({t_nms:.4f}s/frame)'.format(
-                loss=total_loss, da_seg_acc=da_segment_results[0], da_seg_iou=da_segment_results[1], da_seg_miou=da_segment_results[2],
-                ll_seg_acc=ll_segment_results[0], ll_seg_iou=ll_segment_results[1], ll_seg_miou=ll_segment_results[2],
-                p=detect_results[0], r=detect_results[1], map50=detect_results[2], map=detect_results[3],
-                t_inf=times[0], t_nms=times[1])
-            
-            logger.info(msg)
-    
+            CCP_percentage_drops = ccp_results_df.copy()
+
+            metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
+
+            for metric in metrics:
+                initial_value = normal_metrics[metric]
+                CCP_percentage_drops[metric] = ccp_results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
+
+            # Function to create and save table for CCP attack type
+            def create_and_save_ccp_table(color_channel):
+                display_df = ccp_results_df[ccp_results_df['color_channel'] == color_channel].copy()
+
+                # Add normal metrics as the first row
+                normal_metrics_row = normal_metrics.copy()
+                normal_metrics_row['color_channel'] = 'None'
+                normal_metrics_row['da_acc_seg_drop'] = 0
+                normal_metrics_row['da_IoU_seg_drop'] = 0
+                normal_metrics_row['da_mIoU_seg_drop'] = 0
+                normal_metrics_row['ll_acc_seg_drop'] = 0
+                normal_metrics_row['ll_IoU_seg_drop'] = 0
+                normal_metrics_row['ll_mIoU_seg_drop'] = 0
+                normal_metrics_row['detect_result_drop'] = 0
+                normal_metrics_row['loss_avg_drop'] = 0
+                normal_metrics_row = pd.DataFrame([normal_metrics_row])
+                display_df = pd.concat([normal_metrics_row, display_df])
+
+                # Round each metric to 4 significant figures
+                for metric in metrics:
+                    display_df[metric] = display_df[metric].apply(lambda x: f'{x:.4g}')
+
+                # Add percentage drops next to metrics
+                for metric in metrics:
+                    display_df[f'{metric}_drop'] = CCP_percentage_drops[metric].apply(lambda x: f'{x:.2f}%')
+
+                # Interleave the metric and drop columns
+                interleaved_columns = []
+                for metric in metrics:
+                    interleaved_columns.append(metric)
+                    interleaved_columns.append(f'{metric}_drop')
+
+                interleaved_columns = ['color_channel'] + interleaved_columns
+
+                # Reorder the columns in display_df
+                display_df = display_df[interleaved_columns]
+
+                # Plotting the DataFrame
+                fig, ax = plt.subplots(figsize=(28, 16))
+                ax.axis('tight')
+                ax.axis('off')
+
+                # Create table
+                table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
+
+                # Style the drop columns to be red
+                for (i, j), cell in table.get_celld().items():
+                    if j > 0 and display_df.columns[j].endswith('_drop'):
+                        cell.set_text_props(color='red')
+
+                # Increase font size
+                table.auto_set_font_size(False)
+                table.set_fontsize(11)
+
+                # Save the table as an image
+                plt.savefig(f'CCP_results_{color_channel}.png', bbox_inches='tight', dpi=600)
+                plt.close(fig)
+
+            # Create and save tables for each color channel
+            for color_channel in ccp_results_df['color_channel'].unique():
+                create_and_save_ccp_table(color_channel)
+                
     print("Test Finish")
     
     print("Starting time: ")

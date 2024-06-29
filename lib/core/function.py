@@ -132,12 +132,27 @@ def train(cfg, train_loader, model, criterion, optimizer, scaler, epoch, num_bat
                 # writer.add_scalar('train_acc', acc.val, global_steps)
                 writer_dict['train_global_steps'] = global_steps + 1
 
-def validate(epoch, config, val_loader, val_dataset, model, criterion, output_dir, tb_log_dir, perturbed_images=None, experiment_number=0, writer_dict=None, logger=None, device='cpu', rank=-1, epsilon=0.1, attack_type='none', channel='R'):
+def validate(epoch, config, val_loader, val_dataset, model, criterion, output_dir, tb_log_dir, perturbed_images=None, experiment_number=0, writer_dict=None, logger=None, device='cpu', rank=-1, epsilon=0.1, attack_type= None, channel='R'):
+    
+    if attack_type is not None:
+        # Constructing the save directory path with additional details
+        save_dir = os.path.join(output_dir, f'visualization_exp_{experiment_number}')
+        perturbed_save_dir = os.path.join(output_dir, f'{attack_type}_perturbed_image_eps_{epsilon}_{time.strftime("%Y%m%d-%H%M%S")}_{experiment_number}')
+        
+        # Creating the directory if it doesn't exist
+        if not os.path.exists(perturbed_save_dir):
+            os.makedirs(perturbed_save_dir)
+            print(f"Perturbed path has been created: {perturbed_save_dir}")
+        else:
+            print(f"Perturbed path already exists: {perturbed_save_dir}")
+            
     max_stride = 32
     weights = None
-    save_dir = os.path.join(output_dir, f'visualization_exp_{experiment_number}')
+    
+    save_dir = output_dir + os.path.sep + 'visualization'
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
+        
     _, imgsz = [check_img_size(x, s=max_stride) for x in config.MODEL.IMAGE_SIZE]
     test_batch_size = config.TEST.BATCH_SIZE_PER_GPU * len(config.GPUS)
     batch_size = config.TRAIN.BATCH_SIZE_PER_GPU * len(config.GPUS)
@@ -186,7 +201,7 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
             target = assign_target
             nb, _, height, width = img.shape
 
-        if attack_type != 'none':
+        if attack_type != None:
             img.requires_grad = True
             det_out, da_seg_out, ll_seg_out = model(img)
             inf_out, train_out = det_out
@@ -209,6 +224,19 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
                 perturbed_data = img
 
             img = perturbed_data
+            
+
+                
+            # Save perturbed images
+            for j in range(img.size(0)):
+                img_np = img[j].cpu().detach().numpy().transpose(1, 2, 0) * 255
+                img_np = img_np.astype(np.uint8)
+                                
+                img_filename = os.path.splitext(os.path.basename(paths[j]))[0]
+                
+                img_path = os.path.join(perturbed_save_dir, f'{img_filename}.jpg')
+                
+                cv2.imwrite(img_path, img_np)
 
         with torch.no_grad():
             pad_w, pad_h = shapes[0][1][1]
@@ -632,11 +660,6 @@ def run_uap_experiments(model, valid_loader, device, config, criterion, uap_para
         perturbed_images = torch.clamp(torch.tensor(images, dtype=torch.float32) + uap.unsqueeze(0), 0, 1)
         
         perturbed_images = perturbed_images.squeeze(0)
-
-        
-        print(f"\n\n\nThe shape of perturbed images is {perturbed_images.shape}\n")
-
-
         
         da_segment_result, ll_segment_result, detect_result, loss_avg, maps, t = validate(
             epoch=0,
@@ -668,5 +691,83 @@ def run_uap_experiments(model, valid_loader, device, config, criterion, uap_para
             "ll_mIoU_seg": ll_segment_result[2],
             "loss_avg": loss_avg,
         })
+
+    return pd.DataFrame(results)
+
+def run_ccp_experiments(model, valid_loader, device, config, criterion, epsilon_values, channel_values, final_output_directory):
+    results = []
+    experiment_number = 0
+
+    for epsilon in epsilon_values:
+        for channel in channel_values:
+            experiment_number += 1
+            print("Epsilon: ", epsilon, " Channel: ", channel)
+
+            perturbed_images = []
+
+            # Perform perturbation for each image in the validation loader
+            for batch_i, (img, target, paths, shapes) in tqdm(enumerate(valid_loader), total=len(valid_loader)):
+                img = img.to(device, non_blocking = True)
+                
+                assign_target = []
+                for tgt in target:
+                    assign_target.append(tgt.to(device))
+                target = assign_target
+
+                img.requires_grad = True
+                
+                # Forward pass
+                det_out, da_seg_out, ll_seg_out = model(img)
+
+                det_out, da_seg_out, ll_seg_out = model(img)
+                inf_out, train_out = det_out
+                
+                loss, head_losses = criterion((train_out, da_seg_out, ll_seg_out), target, shapes)
+                
+                # loss.update(loss.item(), img.size(0))
+                
+                # Backward pass
+                loss.backward()
+                
+                # Collect datagrad
+                data_grad = img.grad.data
+                
+                # Create perturbed image
+                perturbed_image = color_channel_perturbation(img, epsilon, data_grad, channel)
+                perturbed_images.extend(perturbed_image.cpu().numpy())
+
+                if len(perturbed_images) >= len(valid_loader.dataset):
+                    break
+
+            # Validate the model with perturbed images
+            da_segment_result, ll_segment_result, detect_result, loss_avg, maps, t = validate(
+                epoch=0,
+                config=config,
+                val_loader=valid_loader,
+                val_dataset=valid_loader.dataset,
+                model=model,
+                criterion=criterion,
+                output_dir=final_output_directory,
+                tb_log_dir="log",
+                perturbed_images=perturbed_images,
+                experiment_number=experiment_number,
+                device=device,
+                attack_type='ccp'
+            )
+
+            # Store the results
+            results.append({
+                "epsilon": epsilon,
+                "channel": channel,
+                "da_acc_seg": da_segment_result[0],
+                "da_IoU_seg": da_segment_result[1],
+                "da_mIoU_seg": da_segment_result[2],
+                "ll_acc_seg": ll_segment_result[0],
+                "ll_IoU_seg": ll_segment_result[1],
+                "ll_mIoU_seg": ll_segment_result[2],
+                "detect_result": detect_result,
+                "loss_avg": loss_avg,
+                "time": t
+            })
 
     return pd.DataFrame(results)
