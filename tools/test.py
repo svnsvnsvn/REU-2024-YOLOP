@@ -583,7 +583,7 @@ def main():
                 print(f"\nExperimentation mode is on. Will run using pre-defined arguments of \n{ccp_params}.")
             else:
                 ccp_params = [
-                    (args.args.color_channel, args.epsilon,)
+                    (args.color_channel, args.epsilon,)
                 ]
                 print(f"\nExperimentation mode is NOT on. Will run using provided arguments of \n{ccp_params}.")
 
