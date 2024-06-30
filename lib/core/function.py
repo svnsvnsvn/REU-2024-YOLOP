@@ -145,13 +145,16 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
             print(f"Perturbed path has been created: {perturbed_save_dir}")
         else:
             print(f"Perturbed path already exists: {perturbed_save_dir}")
-            
+    else:
+        save_dir = output_dir + os.path.sep + 'visualization'
+
+    if not os.path.exists(save_dir):
+        os.mkdir(save_dir)
+        
     max_stride = 32
     weights = None
     
-    save_dir = output_dir + os.path.sep + 'visualization'
-    if not os.path.exists(save_dir):
-        os.mkdir(save_dir)
+
         
     _, imgsz = [check_img_size(x, s=max_stride) for x in config.MODEL.IMAGE_SIZE]
     test_batch_size = config.TEST.BATCH_SIZE_PER_GPU * len(config.GPUS)
@@ -225,7 +228,6 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
 
             img = perturbed_data
             
-
                 
             # Save perturbed images
             for j in range(img.size(0)):
@@ -703,43 +705,7 @@ def run_ccp_experiments(model, valid_loader, device, config, criterion, epsilon_
             experiment_number += 1
             print("Epsilon: ", epsilon, " Channel: ", channel)
 
-            perturbed_images = []
-
-            # Perform perturbation for each image in the validation loader
-            for batch_i, (img, target, paths, shapes) in tqdm(enumerate(valid_loader), total=len(valid_loader)):
-                img = img.to(device, non_blocking = True)
-                
-                assign_target = []
-                for tgt in target:
-                    assign_target.append(tgt.to(device))
-                target = assign_target
-
-                img.requires_grad = True
-                
-                # Forward pass
-                det_out, da_seg_out, ll_seg_out = model(img)
-
-                det_out, da_seg_out, ll_seg_out = model(img)
-                inf_out, train_out = det_out
-                
-                loss, head_losses = criterion((train_out, da_seg_out, ll_seg_out), target, shapes)
-                
-                # loss.update(loss.item(), img.size(0))
-                
-                # Backward pass
-                loss.backward()
-                
-                # Collect datagrad
-                data_grad = img.grad.data
-                
-                # Create perturbed image
-                perturbed_image = color_channel_perturbation(img, epsilon, data_grad, channel)
-                perturbed_images.extend(perturbed_image.cpu().numpy())
-
-                if len(perturbed_images) >= len(valid_loader.dataset):
-                    break
-
-            # Validate the model with perturbed images
+            # Validate the model with each epslon value and channel 
             da_segment_result, ll_segment_result, detect_result, loss_avg, maps, t = validate(
                 epoch=0,
                 config=config,
@@ -749,7 +715,6 @@ def run_ccp_experiments(model, valid_loader, device, config, criterion, epsilon_
                 criterion=criterion,
                 output_dir=final_output_directory,
                 tb_log_dir="log",
-                perturbed_images=perturbed_images,
                 experiment_number=experiment_number,
                 device=device,
                 attack_type='ccp'
@@ -758,7 +723,7 @@ def run_ccp_experiments(model, valid_loader, device, config, criterion, epsilon_
             # Store the results
             results.append({
                 "epsilon": epsilon,
-                "channel": channel,
+                "color_channel": channel,
                 "da_acc_seg": da_segment_result[0],
                 "da_IoU_seg": da_segment_result[1],
                 "da_mIoU_seg": da_segment_result[2],

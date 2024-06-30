@@ -57,7 +57,7 @@ _C.DATASET.LANEROOT = 'lib/dataset/ll_seg_annotations' #'/home/zwt/bdd/bdd_lane_
 
 _C.DATASET.DATASET = 'BddDataset'
 _C.DATASET.TRAIN_SET = 'train'
-_C.DATASET.TEST_SET = 'val'
+_C.DATASET.TEST_SET =  'train' #'val'
 _C.DATASET.DATA_FORMAT = 'jpg'
 _C.DATASET.SELECT_DATA = False
 _C.DATASET.ORG_IMG_SIZE = [720, 1280]
