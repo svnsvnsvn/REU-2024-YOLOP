@@ -29,7 +29,6 @@ from lib.utils.utils import create_logger, select_device
 
 
 import datetime
-from bs4 import BeautifulSoup
 import matplotlib.pyplot as plt
 
 def calculate_percentage_drop(initial, current):
@@ -174,6 +173,65 @@ def parse_args():
     args = parser.parse_args()
     return args
 
+def create_and_save_table(results_df, normal_metrics, metrics, identifier_column, output_filename_prefix, identifier_values, display_identifier):
+    percentage_drops_df = results_df.copy()
+
+    for metric in metrics:
+        initial_value = normal_metrics[metric]
+        percentage_drops_df[metric] = results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
+
+    for identifier_value in identifier_values:
+        display_df = results_df[results_df[identifier_column] == identifier_value].copy()
+
+        # Add normal metrics as the first row
+        normal_metrics_row = normal_metrics.copy()
+        normal_metrics_row[identifier_column] = display_identifier
+        for metric in metrics:
+            normal_metrics_row[f'{metric}_drop'] = 0
+        
+        normal_metrics_row_df = pd.DataFrame([normal_metrics_row])
+        display_df = pd.concat([normal_metrics_row_df, display_df])
+
+        # Round each metric to 4 significant figures
+        for metric in metrics:
+            display_df[metric] = display_df[metric].apply(lambda x: f'{x:.4g}')
+
+        # Add percentage drops next to metrics
+        for metric in metrics:
+            display_df[f'{metric}_drop'] = percentage_drops_df[metric].apply(lambda x: f'{x:.2f}%')
+
+        # Interleave the metric and drop columns
+        interleaved_columns = []
+        for metric in metrics:
+            interleaved_columns.append(metric)
+            interleaved_columns.append(f'{metric}_drop')
+
+        interleaved_columns = [identifier_column] + interleaved_columns
+
+        # Reorder the columns in display_df
+        display_df = display_df[interleaved_columns]
+
+        # Plotting the DataFrame
+        fig, ax = plt.subplots(figsize=(28, 16))
+        ax.axis('tight')
+        ax.axis('off')
+
+        # Create table
+        table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
+
+        # Style the drop columns to be red
+        for (i, j), cell in table.get_celld().items():
+            if j > 0 and display_df.columns[j].endswith('_drop'):
+                cell.set_text_props(color='red')
+
+        # Increase font size
+        table.auto_set_font_size(False)
+        table.set_fontsize(11)
+
+        # Save the table as an image
+        plt.savefig(f'{output_filename_prefix}_{identifier_value}.png', bbox_inches='tight', dpi=600)
+        plt.close(fig)
+        
 def main():
     # set all the configurations
     args = parse_args()
@@ -302,363 +360,71 @@ def main():
     'loss_avg': total_loss
 
     }
-        
+    
     match attack_type:
         case "FGSM":
-            # FGSM
-            # FGSM attack parameters
-            if(args.experiment_mode == 1):
+            # FGSM specific logic
+            if args.experiment_mode == 1:
                 epsilons = [.03, .05, .1, .15, .2, .3, .5, .75, .9, 1]  
                 print(f"\nExperiment mode is {args.experiment_mode}, will be using pre-generated epsilon values of {epsilons}")
-            elif(args.experiment_mode == 0):
+            elif args.experiment_mode == 0:
                 epsilons = [args.epsilon]
                 print(f"\nExperiment mode is {args.experiment_mode}, will be using your provided epsilon value of {epsilons}")
 
             fgsm_results_df = run_fgsm_experiments(model, valid_loader, device, cfg, criterion, epsilons, final_output_dir, args.fgsm_attack_type)
-            
-            FGSM_percentage_drops = fgsm_results_df.copy()
-            
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
-                
-            for metric in metrics:
-                initial_value = normal_metrics[metric]
-                FGSM_percentage_drops[metric] = fgsm_results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
-
-            display_df = fgsm_results_df.copy()
-                                
-            # Add normal metrics as the first row
-            normal_metrics_row = normal_metrics.copy()
-            normal_metrics_row['epsilon'] = 0
-            normal_metrics_row['da_acc_seg_drop'] = 0
-            normal_metrics_row['da_IoU_seg_drop'] = 0
-            normal_metrics_row['da_mIoU_seg_drop'] = 0
-            normal_metrics_row['ll_acc_seg_drop'] = 0
-            normal_metrics_row['ll_IoU_seg_drop'] = 0
-            normal_metrics_row['ll_mIoU_seg_drop'] = 0
-            normal_metrics_row['detect_result_drop'] = 0
-            normal_metrics_row['loss_avg_drop'] = 0
-            
-            normal_metrics_row_df = pd.DataFrame([normal_metrics_row])
-            display_df = pd.concat([normal_metrics_row_df, display_df]) #, ignore_index=True
-
-
-            # Round each metric to 4 significant figures
-            for metric in metrics:
-                display_df[metric] = pd.to_numeric(display_df[metric], errors='coerce')
-                display_df[metric] = display_df[metric].apply(lambda x: f'{x:.4g}')
-
-            for metric in metrics:
-                display_df[f'{metric}_drop'] = FGSM_percentage_drops[metric].apply(lambda x: f'{x:.2f}%')
-
-            # Interleave the metric and drop columns
-            interleaved_columns = []
-            for metric in metrics:
-                interleaved_columns.append(metric)
-                interleaved_columns.append(f'{metric}_drop')
-
-            # Ensure 'epsilon' is the first column
-            interleaved_columns = ['epsilon'] + interleaved_columns
-
-            # Reorder the columns in display_df
-            display_df = display_df[interleaved_columns]
-
-            # Plotting the DataFrame
-            fig, ax = plt.subplots(figsize=(28, 16))
-            ax.axis('tight')
-            ax.axis('off')
-
-            # Create table
-            table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
-
-            # Style the drop columns to be red
-            for (i, j), cell in table.get_celld().items():
-                if j > 0 and display_df.columns[j].endswith('_drop'):
-                    cell.set_text_props(color='red')
-
-            # Increase font size
-            table.auto_set_font_size(False)
-            table.set_fontsize(11)
-
-            # Save the table as an image
-            plt.savefig('FGSM_results.png', bbox_inches='tight', dpi=600)
-            plt.close(fig)
-            
+            create_and_save_table(fgsm_results_df, normal_metrics, metrics, 'epsilon', 'FGSM_results', fgsm_results_df['epsilon'].unique(), '0')
+        
         case "JSMA":
-            # JSMA        
-            if args.experiment_mode == True:
+            # JSMA specific logic
+            if args.experiment_mode:
                 perturbation_params = [
-                    (10, 0.1, 'add'),
-                    (10, 0.1, 'set'),
-                    (10, 0.1, 'noise'),
-                    (20, 0.1, 'add'),
-                    (20, 0.1, 'set'),
-                    (20, 0.1, 'noise'),
-                    (30, 0.1, 'add'),
-                    (30, 0.1, 'set'),
-                    (30, 0.1, 'noise'),
-                    (50, 0.1, 'add'),
-                    (50, 0.1, 'set'),
-                    (50, 0.1, 'noise'),
-                    (100, 0.1, 'add'),
-                    (100, 0.1, 'set'),
-                    (100, 0.1, 'noise'),
-                    (1000, 0.1, 'add'),
-                    (1000, 0.1, 'set'),
-                    (1000, 0.1, 'noise')
+                    (10, 0.1, 'add'), (10, 0.1, 'set'), (10, 0.1, 'noise'),
+                    (20, 0.1, 'add'), (20, 0.1, 'set'), (20, 0.1, 'noise'),
+                    # Add more parameter sets as needed
                 ]
-                
-                print(f"\nExperimentation mode is on. Will run using pre-defined arguments of \n{perturbation_params}.")
-
+                print(f"\nExperiment mode is on. Will run using pre-defined arguments of {perturbation_params}")
             else:
                 perturbation_params = [(args.num_pixels, args.jsma_perturbation, args.jsma_attack_type)]
-                print(f"\nExperimentation mode is NOT on. Will run using provided arguments of \n{perturbation_params}.")
+                print(f"\nExperiment mode is NOT on. Will run using provided arguments of {perturbation_params}")
 
             jsma_results_df = run_jsma_experiments(model, valid_loader, device, cfg, criterion, perturbation_params, final_output_dir)
-            
-            JSMA_percentage_drops = jsma_results_df.copy()
-            
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
-            
-            for metric in metrics:
-                initial_value = normal_metrics[metric]
-                JSMA_percentage_drops[metric] = jsma_results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
-                
-            # Function to create and save table for each attack type
-            def create_and_save_table(num_pixels):
-                display_df = jsma_results_df[jsma_results_df['num_pixels'] == num_pixels].copy()
-
-                # Add normal metrics as the first row
-                normal_metrics_row = normal_metrics.copy()
-                normal_metrics_row['num_pixels'] = '0'
-                normal_metrics_row['da_acc_seg_drop'] = 0
-                normal_metrics_row['da_IoU_seg_drop'] = 0
-                normal_metrics_row['da_mIoU_seg_drop'] = 0
-                normal_metrics_row['ll_acc_seg_drop'] = 0
-                normal_metrics_row['ll_IoU_seg_drop'] = 0
-                normal_metrics_row['ll_mIoU_seg_drop'] = 0
-                normal_metrics_row['detect_result_drop'] = 0
-                normal_metrics_row['loss_avg_drop'] = 0
-                normal_metrics_row = pd.DataFrame([normal_metrics_row])
-                display_df = pd.concat([normal_metrics_row, display_df])
-
-                # Round each metric to 4 significant figures
-                for metric in metrics:
-                    display_df[metric] = display_df[metric].apply(lambda x: f'{x:.4g}')
-
-                # Add percentage drops next to metrics
-                for metric in metrics:
-                    display_df[f'{metric}_drop'] = JSMA_percentage_drops[metric].apply(lambda x: f'{x:.2f}%')
-
-                # Interleave the metric and drop columns
-                interleaved_columns = []
-                for metric in metrics:
-                    interleaved_columns.append(metric)
-                    interleaved_columns.append(f'{metric}_drop')
-
-                # Ensure 'attack_type' is the first column
-                interleaved_columns = ['num_pixels'] + interleaved_columns
-
-                # Reorder the columns in display_df
-                display_df = display_df[interleaved_columns]
-
-                # Plotting the DataFrame
-                fig, ax = plt.subplots(figsize=(28, 16))
-                ax.axis('tight')
-                ax.axis('off')
-
-                # Create table
-                table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
-
-                # Style the drop columns to be red
-                for (i, j), cell in table.get_celld().items():
-                    if j > 0 and display_df.columns[j].endswith('_drop'):
-                        cell.set_text_props(color='red')
-
-                # Increase font size
-                table.auto_set_font_size(False)
-                table.set_fontsize(11)
-
-                # Save the table as an image
-                plt.savefig(f'JSMA_results_{num_pixels}.png', bbox_inches='tight', dpi=600)
-                plt.close(fig)
-                
-            # Create and save tables for each attack type
-            for num_pixels in jsma_results_df['num_pixels'].unique():
-                create_and_save_table(num_pixels)
+            create_and_save_table(jsma_results_df, normal_metrics, metrics, 'num_pixels', 'JSMA_results', jsma_results_df['num_pixels'].unique(), '0')
+        
         case "UAP":
-            # UAP
-            if args.experiment_mode == True:
+            # UAP specific logic
+            if args.experiment_mode:
                 uap_params = [
-                    (10, 0.03, 0.8, None, None, 12),
-                    (10, 0.05, 0.8, None, None, 12),
-                    (10, 0.1, 0.8, None, None, 12),
+                    (10, 0.03, 0.8, None, None, 12), (10, 0.05, 0.8, None, None, 12), (10, 0.1, 0.8, None, None, 12),
                     # Add more parameter sets as needed
                 ]
-                print(f"\nExperimentation mode is on. Will run using pre-defined arguments of \n{uap_params}.")
+                print(f"\nExperiment mode is on. Will run using pre-defined arguments of {uap_params}")
             else:
-                uap_params = [
-                    (args.uap_max_iterations, args.uap_eps, args.uap_delta, args.uap_num_classes, args.uap_targeted, args.uap_batch_size)
-                ]
-                print(f"\nExperimentation mode is NOT on. Will run using provided arguments of \n{uap_params}.")
-                
+                uap_params = [(args.uap_max_iterations, args.uap_eps, args.uap_delta, args.uap_num_classes, args.uap_targeted, args.uap_batch_size)]
+                print(f"\nExperiment mode is NOT on. Will run using provided arguments of {uap_params}")
+
             uap_results_df = run_uap_experiments(model, valid_loader, device, cfg, criterion, uap_params, final_output_dir)
-
-            UAP_percentage_drops = uap_results_df.copy()
-
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
-
-            for metric in metrics:
-                initial_value = normal_metrics[metric]
-                UAP_percentage_drops[metric] = uap_results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
-
-            # Function to create and save table for UAP attack type
-            def create_and_save_uap_table():
-                display_df = uap_results_df.copy()
-
-                # Add normal metrics as the first row
-                normal_metrics_row = normal_metrics.copy()
-                normal_metrics_row['eps'] = '0'
-                normal_metrics_row = pd.DataFrame([normal_metrics_row])
-                display_df = pd.concat([normal_metrics_row, display_df])
-
-                # Round each metric to 4 significant figures
-                for metric in metrics:
-                    display_df[metric] = display_df[metric].apply(lambda x: f'{x:.4g}')
-
-                # Add percentage drops next to metrics
-                for metric in metrics:
-                    display_df[f'{metric}_drop'] = UAP_percentage_drops[metric].apply(
-                        lambda x: f'{x:.2f}%' if x <= 0 else f'+{abs(x):.2f}%'
-                    )
-
-                # Interleave the metric and drop columns
-                interleaved_columns = []
-                for metric in metrics:
-                    interleaved_columns.append(metric)
-                    interleaved_columns.append(f'{metric}_drop')
-
-                interleaved_columns = ['eps'] + interleaved_columns
-
-                # Reorder the columns in display_df
-                display_df = display_df[interleaved_columns]
-
-                # Plotting the DataFrame
-                fig, ax = plt.subplots(figsize=(28, 16))
-                ax.axis('tight')
-                ax.axis('off')
-
-                # Create table
-                table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
-
-                # Style the drop columns to be red
-                for (i, j), cell in table.get_celld().items():
-                    if j > 0 and display_df.columns[j].endswith('_drop'):
-                        cell.set_text_props(color='red')
-
-                # Increase font size
-                table.auto_set_font_size(False)
-                table.set_fontsize(11)
-
-                # Save the table as an image
-                plt.savefig(f'UAP_results.png', bbox_inches='tight', dpi=600)
-                plt.close(fig)
-
-            # Create and save table for UAP attack type
-            create_and_save_uap_table()
+            create_and_save_table(uap_results_df, normal_metrics, metrics, 'eps', 'UAP_results', uap_results_df['eps'].unique(), '0')
+        
         case "CCP":
-            # Color Channel Perturbation
-            if args.experiment_mode == True:
+            # CCP specific logic
+            if args.experiment_mode:
                 ccp_params = [
-                    (0.01, 'R'),
-                    (0.03, 'R'),
-                    (0.05, 'R'),
-                    (0.01, 'G'),
-                    (0.03, 'G'),
-                    (0.05, 'G'),
-                    (0.01, 'B'),
-                    (0.03, 'B'),
-                    (0.05, 'B'),
+                    (0.01, 'R'), (0.03, 'R'), (0.05, 'R'), (0.01, 'G'), (0.03, 'G'), (0.05, 'G'), (0.01, 'B'), (0.03, 'B'), (0.05, 'B'),
                     # Add more parameter sets as needed
                 ]
-                print(f"\nExperimentation mode is on. Will run using pre-defined arguments of \n{ccp_params}.")
+                print(f"\nExperiment mode is on. Will run using pre-defined arguments of {ccp_params}")
             else:
-                ccp_params = [
-                    (args.color_channel, args.epsilon)
-                ]
-                print(f"\nExperimentation mode is NOT on. Will run using provided arguments of \n{ccp_params}.")
+                ccp_params = [(args.epsilon, args.color_channel)]
+                print(f"\nExperiment mode is NOT on. Will run using provided arguments of {ccp_params}")
 
-            # Run CCP Experiments
-            ccp_results_df = run_ccp_experiments(model, valid_loader, device, cfg, criterion, ccp_params[0][0], ccp_params[0][1], final_output_dir)
-            
-            CCP_percentage_drops = ccp_results_df.copy()
-
+            ccp_results_df = run_ccp_experiments(model, valid_loader, device, cfg, criterion, ccp_params, final_output_dir)
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
+            create_and_save_table(ccp_results_df, normal_metrics, metrics, 'color_channel', 'CCP_results', ccp_results_df['color_channel'].unique(), 'None')
 
-            for metric in metrics:
-                initial_value = normal_metrics[metric]
-                CCP_percentage_drops[metric] = ccp_results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
 
-            # Function to create and save table for CCP attack type
-            def create_and_save_ccp_table(color_channel):
-                display_df = ccp_results_df[ccp_results_df['color_channel'] == color_channel].copy()
-
-                # Add normal metrics as the first row
-                normal_metrics_row = normal_metrics.copy()
-                normal_metrics_row['color_channel'] = 'None'
-                normal_metrics_row['da_acc_seg_drop'] = 0
-                normal_metrics_row['da_IoU_seg_drop'] = 0
-                normal_metrics_row['da_mIoU_seg_drop'] = 0
-                normal_metrics_row['ll_acc_seg_drop'] = 0
-                normal_metrics_row['ll_IoU_seg_drop'] = 0
-                normal_metrics_row['ll_mIoU_seg_drop'] = 0
-                normal_metrics_row['detect_result_drop'] = 0
-                normal_metrics_row['loss_avg_drop'] = 0
-                normal_metrics_row = pd.DataFrame([normal_metrics_row])
-                display_df = pd.concat([normal_metrics_row, display_df])
-
-                # Round each metric to 4 significant figures
-                for metric in metrics:
-                    display_df[metric] = display_df[metric].apply(lambda x: f'{x:.4g}')
-
-                # Add percentage drops next to metrics
-                for metric in metrics:
-                    display_df[f'{metric}_drop'] = CCP_percentage_drops[metric].apply(lambda x: f'{x:.2f}%')
-
-                # Interleave the metric and drop columns
-                interleaved_columns = []
-                for metric in metrics:
-                    interleaved_columns.append(metric)
-                    interleaved_columns.append(f'{metric}_drop')
-
-                interleaved_columns = ['color_channel'] + interleaved_columns
-
-                # Reorder the columns in display_df
-                display_df = display_df[interleaved_columns]
-
-                # Plotting the DataFrame
-                fig, ax = plt.subplots(figsize=(28, 16))
-                ax.axis('tight')
-                ax.axis('off')
-
-                # Create table
-                table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
-
-                # Style the drop columns to be red
-                for (i, j), cell in table.get_celld().items():
-                    if j > 0 and display_df.columns[j].endswith('_drop'):
-                        cell.set_text_props(color='red')
-
-                # Increase font size
-                table.auto_set_font_size(False)
-                table.set_fontsize(11)
-
-                # Save the table as an image
-                plt.savefig(f'CCP_results_{color_channel}.png', bbox_inches='tight', dpi=600)
-                plt.close(fig)
-
-            # Create and save tables for each color channel
-            for color_channel in ccp_results_df['color_channel'].unique():
-                create_and_save_ccp_table(color_channel)
                 
     print("Test Finish")
     

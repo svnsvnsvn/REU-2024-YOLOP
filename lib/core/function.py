@@ -219,7 +219,7 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
                 perturbed_data = fgsm_attack_with_noise(img, epsilon, data_grad)
             elif attack_type == 'iterative_fgsm':
                 perturbed_data = iterative_fgsm_attack(img, epsilon, data_grad, alpha=0.01, num_iter=10, model=model, criterion=criterion, target=target, shapes=shapes)
-            elif attack_type == 'color_channel':
+            elif attack_type == 'ccp':
                 perturbed_data = color_channel_perturbation(img, epsilon, data_grad, channel)
             elif attack_type == 'uap':
                 perturbed_data = perturbed_images.to(device, non_blocking=True)
@@ -696,14 +696,13 @@ def run_uap_experiments(model, valid_loader, device, config, criterion, uap_para
 
     return pd.DataFrame(results)
 
-def run_ccp_experiments(model, valid_loader, device, config, criterion, epsilon_values, channel_values, final_output_directory):
+def run_ccp_experiments(model, valid_loader, device, config, criterion,  ccp_params, final_output_directory):
     results = []
     experiment_number = 0
 
-    for epsilon in epsilon_values:
-        for channel in channel_values:
+    for epsilon, color_channel in ccp_params:
             experiment_number += 1
-            print("Epsilon: ", epsilon, " Channel: ", channel)
+            print("Epsilon: ", epsilon, " Channel: ", color_channel)
 
             # Validate the model with each epslon value and channel 
             da_segment_result, ll_segment_result, detect_result, loss_avg, maps, t = validate(
@@ -717,13 +716,15 @@ def run_ccp_experiments(model, valid_loader, device, config, criterion, epsilon_
                 tb_log_dir="log",
                 experiment_number=experiment_number,
                 device=device,
-                attack_type='ccp'
+                attack_type='ccp',
+                epsilon = epsilon,
+                channel = color_channel
             )
 
             # Store the results
             results.append({
                 "epsilon": epsilon,
-                "color_channel": channel,
+                "color_channel": color_channel,
                 "da_acc_seg": da_segment_result[0],
                 "da_IoU_seg": da_segment_result[1],
                 "da_mIoU_seg": da_segment_result[2],
