@@ -21,6 +21,8 @@ from lib.core.Attacks.JSMA import calculate_saliency, find_and_perturb_highest_s
 from lib.core.Attacks.UAP import uap_sgd_yolop
 from lib.core.Attacks.CCP import color_channel_perturbation
 
+from lib.core.Defenses.PreProcessing import image_resizer, compress_jpg, gaussian_blur, noise, bit_depth
+
 class AverageMeter(object):
     """Computes and stores the average and current value"""
     def __init__(self):
@@ -132,12 +134,27 @@ def train(cfg, train_loader, model, criterion, optimizer, scaler, epoch, num_bat
                 # writer.add_scalar('train_acc', acc.val, global_steps)
                 writer_dict['train_global_steps'] = global_steps + 1
 
-def validate(epoch, config, val_loader, val_dataset, model, criterion, output_dir, tb_log_dir, perturbed_images=None, experiment_number=0, writer_dict=None, logger=None, device='cpu', rank=-1, epsilon=0.1, attack_type= None, channel='R'):
+def validate(epoch, config, val_loader, val_dataset, model, criterion, output_dir, tb_log_dir, perturbed_images=None, experiment_number=0, writer_dict=None, logger=None, device='cpu', rank=-1, epsilon=0.1, attack_type=None, channel='R', resizer=None, noise_sigma=None, quality=None, gauss_ksize=None, gauss_sigma=None, bit_depth_val=None):
+    
+    defense_tag = ""
+    if resizer or noise_sigma or quality or gauss_ksize or gauss_sigma or bit_depth_val:
+        defense_tag = "with_defense_"
+        if resizer:
+            defense_tag += f"resizer_{resizer}_"
+        if noise_sigma:
+            defense_tag += f"noise_{noise_sigma}_"
+        if quality:
+            defense_tag += f"quality_{quality}_"
+        if gauss_ksize and gauss_sigma:
+            defense_tag += f"gauss_{gauss_ksize}_{gauss_sigma}_"
+        if bit_depth_val:
+            defense_tag += f"bit_depth_{bit_depth_val}_"
+        defense_tag = defense_tag.rstrip('_')
     
     if attack_type is not None:
         # Constructing the save directory path with additional details
-        save_dir = os.path.join(output_dir, f'visualization_exp_{experiment_number}')
-        perturbed_save_dir = os.path.join(output_dir, f'{attack_type}_perturbed_image_eps_{epsilon}_{time.strftime("%Y%m%d-%H%M%S")}_{experiment_number}')
+        save_dir = os.path.join(output_dir, f'visualization_exp_{experiment_number}_{defense_tag}')
+        perturbed_save_dir = os.path.join(output_dir, f'{attack_type}_perturbed_image_eps_{epsilon}_{time.strftime("%Y%m%d-%H%M%S")}_ExpNum{experiment_number}_{defense_tag}')
         
         # Creating the directory if it doesn't exist
         if not os.path.exists(perturbed_save_dir):
@@ -223,11 +240,16 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
                 perturbed_data = color_channel_perturbation(img, epsilon, data_grad, channel)
             elif attack_type == 'uap':
                 perturbed_data = perturbed_images.to(device, non_blocking=True)
+            elif attack_type == 'jsma':
+                perturbed_data = perturbed_images
             else:
                 perturbed_data = img
 
             img = perturbed_data
             
+                            
+            # Apply defenses to the perturbed images
+            img = apply_defenses(img, resizer, noise_sigma, quality, gauss_ksize, gauss_sigma, bit_depth_val)
                 
             # Save perturbed images
             for j in range(img.size(0)):
@@ -239,6 +261,9 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
                 img_path = os.path.join(perturbed_save_dir, f'{img_filename}.jpg')
                 
                 cv2.imwrite(img_path, img_np)
+
+            
+
 
         with torch.no_grad():
             pad_w, pad_h = shapes[0][1][1]
@@ -538,7 +563,7 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
     return da_segment_result, ll_segment_result, detect_result, losses.avg, maps, t
 
     
-def run_fgsm_experiments(model, valid_loader, device, config, criterion, epsilon_values, final_output_directory, fgsm_attack_type):
+def run_fgsm_experiments(model, valid_loader, device, config, criterion, epsilon_values, final_output_directory, fgsm_attack_type, resizer=None, noise_sigma=None, quality=None, gauss_ksize=None, gauss_sigma=None, bit_depth_val=None):
     results = []
     experiment_number = 0
 
@@ -560,7 +585,13 @@ def run_fgsm_experiments(model, valid_loader, device, config, criterion, epsilon
             experiment_number=experiment_number,
             device=device,
             epsilon=epsilon,
-            attack_type=fgsm_attack_type
+            attack_type=fgsm_attack_type,
+            resizer=resizer,
+            noise_sigma=noise_sigma,
+            quality=quality,
+            gauss_ksize=gauss_ksize,
+            gauss_sigma=gauss_sigma,
+            bit_depth_val=bit_depth_val
         )
         
         # Collect results for each epsilon
@@ -581,7 +612,7 @@ def run_fgsm_experiments(model, valid_loader, device, config, criterion, epsilon
 
     return pd.DataFrame(results)
 
-def run_jsma_experiments(model, valid_loader, device, config, criterion, perturbation_params, final_output_directory):
+def run_jsma_experiments(model, valid_loader, device, config, criterion, perturbation_params, final_output_directory, resizer=None, noise_sigma=None, quality=None, gauss_ksize=None, gauss_sigma=None, bit_depth_val=None):
     results = []
     experiment_number = 0
 
@@ -616,7 +647,13 @@ def run_jsma_experiments(model, valid_loader, device, config, criterion, perturb
             perturbed_images=perturbed_images,
             experiment_number=experiment_number,
             device=device,
-            attack_type='jsma'
+            attack_type='jsma',
+                        resizer=resizer,
+            noise_sigma=noise_sigma,
+            quality=quality,
+            gauss_ksize=gauss_ksize,
+            gauss_sigma=gauss_sigma,
+            bit_depth_val=bit_depth_val
         )
 
         # Store the results
@@ -638,7 +675,8 @@ def run_jsma_experiments(model, valid_loader, device, config, criterion, perturb
 
     return pd.DataFrame(results)
 
-def run_uap_experiments(model, valid_loader, device, config, criterion, uap_params, final_output_directory):
+def run_uap_experiments(model, valid_loader, device, config, criterion, uap_params, final_output_directory, resizer=None, noise_sigma=None, quality=None, gauss_ksize=None, gauss_sigma=None, bit_depth_val=None):
+
     results = []
     experiment_number = 0
     
@@ -675,7 +713,13 @@ def run_uap_experiments(model, valid_loader, device, config, criterion, uap_para
             experiment_number=experiment_number,
             device=device,
             perturbed_images=perturbed_images,
-            attack_type='uap'
+            attack_type='uap',
+            resizer=resizer,
+            noise_sigma=noise_sigma,
+            quality=quality,
+            gauss_ksize=gauss_ksize,
+            gauss_sigma=gauss_sigma,
+            bit_depth_val=bit_depth_val
         )
 
         results.append({
@@ -696,7 +740,7 @@ def run_uap_experiments(model, valid_loader, device, config, criterion, uap_para
 
     return pd.DataFrame(results)
 
-def run_ccp_experiments(model, valid_loader, device, config, criterion,  ccp_params, final_output_directory):
+def run_ccp_experiments(model, valid_loader, device, config, criterion, ccp_params, final_output_directory, resizer=None, noise_sigma=None, quality=None, gauss_ksize=None, gauss_sigma=None, bit_depth_val=None):
     results = []
     experiment_number = 0
 
@@ -716,9 +760,15 @@ def run_ccp_experiments(model, valid_loader, device, config, criterion,  ccp_par
                 tb_log_dir="log",
                 experiment_number=experiment_number,
                 device=device,
+                epsilon=epsilon,
                 attack_type='ccp',
-                epsilon = epsilon,
-                channel = color_channel
+                channel=channel,
+                resizer=resizer,
+                noise_sigma=noise_sigma,
+                quality=quality,
+                gauss_ksize=gauss_ksize,
+                gauss_sigma=gauss_sigma,
+                bit_depth_val=bit_depth_val
             )
 
             # Store the results
@@ -737,3 +787,27 @@ def run_ccp_experiments(model, valid_loader, device, config, criterion,  ccp_par
             })
 
     return pd.DataFrame(results)
+
+
+def apply_defenses(image, resizer=None, noise_sigma=None, quality=None, gauss_ksize=None, gauss_sigma=None, bit_depth_val=None):
+    if resizer:
+        width, height = map(int, resizer.split('x'))
+        image = image_resizer(image, (width, height))
+        print(f"Resizer defense performed.")
+    if noise_sigma:
+        image = noise(image, mean=0, sigma=noise_sigma)
+        print(f"Noise Sigma defense performed.")
+    if quality:
+        image = compress_jpg(image, quality)
+        print(f"Compress jpg defense performed.")
+
+    if gauss_ksize and gauss_sigma:
+        ksize_x, ksize_y = map(int, gauss_ksize.split('x'))
+        image = gaussian_blur(image, (ksize_x, ksize_y), sigX=gauss_sigma, sigY=gauss_sigma)
+        print(f"Gaussian blur defense performed.")
+
+    if bit_depth_val:
+        image = bit_depth(image, bits=bit_depth_val)
+        print(f"Bit depth defense performed.")
+
+    return image

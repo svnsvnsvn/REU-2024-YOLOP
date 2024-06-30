@@ -158,6 +158,14 @@ def parse_args():
                     choices=['R', 'G', 'B'],
                     help='Color channel to perturb (R, G, B)',
                     default='R')
+    
+    # Defenses 
+    parser.add_argument('--resizer', default='1280x720', type=str, help='Desired WIDTHxHEIGHT of your resized image')
+    parser.add_argument('--quality', type=int, help='Desired quality for JPEG compression output. 0 - 100')
+    parser.add_argument('--border_type', type=str, choices=['default', 'constant', 'reflect', 'replicate'], help= 'border type for Gaussian Blurring')
+    parser.add_argument('--gauss', type=str, help="Apply Gaussian Blurring to image. Specify ksize as WIDTHxHEIGHT")
+    parser.add_argument('--noise', type=float, help='Add Gaussian Noise to image. Specify sigma value for noise generation.')
+    parser.add_argument('--bit_depth', type=int, help='Choose bit value between 1 - 8')
 
     args = parser.parse_args()
     return args
@@ -419,7 +427,11 @@ def main():
                 epsilons = [args.epsilon]
                 print(f"\nExperiment mode is {args.experiment_mode}, will be using your provided epsilon value of {epsilons}")
 
-            fgsm_results_df = run_fgsm_experiments(model, valid_loader, device, cfg, criterion, epsilons, final_output_dir, args.fgsm_attack_type)
+            fgsm_results_df = run_fgsm_experiments(
+                model, valid_loader, device, cfg, criterion, epsilons, final_output_dir, args.fgsm_attack_type,
+                resizer=args.resizer, noise_sigma=args.noise, quality=args.quality, gauss_ksize=args.gauss, gauss_sigma=args.noise, bit_depth_val=args.bit_depth
+            )
+            
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
 
             create_and_save_table(fgsm_results_df, normal_metrics, metrics, 'epsilon', 'FGSM_results', fgsm_results_df['epsilon'].unique(), '0', combine=True)
@@ -431,16 +443,29 @@ def main():
             # JSMA specific logic
             if args.experiment_mode:
                 perturbation_params = [
-                    (10, 0.1, 'add'), (10, 0.1, 'set'), (10, 0.1, 'noise'),
-                    (20, 0.1, 'add'), (20, 0.1, 'set'), (20, 0.1, 'noise'),
-                    # Add more parameter sets as needed
+                (10, 0.1, 'add'), (10, 0.1, 'set'), (10, 0.1, 'noise'),
+                (10, 1.1, 'add'), (10, 1.1, 'set'), (10, 1.1, 'noise'),
+                (60, 0.1, 'add'), (60, 0.1, 'set'), (60, 0.1, 'noise'),
+                (60, 1.1, 'add'), (60, 1.1, 'set'), (60, 1.1, 'noise'),
+                (110, 0.1, 'add'), (110, 0.1, 'set'), (110, 0.1, 'noise'),
+                (110, 1.1, 'add'), (110, 1.1, 'set'), (110, 1.1, 'noise'),
+                (160, 0.1, 'add'), (160, 0.1, 'set'), (160, 0.1, 'noise'),
+                (160, 1.1, 'add'), (160, 1.1, 'set'), (160, 1.1, 'noise'),
+                (160, 5.1, 'add'), (160, 5.1, 'set'), (160, 5.1, 'noise'),
+                (160, 9.1, 'add'), (160, 9.1, 'set'), (160, 9.1, 'noise'),
+                (610, 0.1, 'add'), (610, 0.1, 'set'), (610, 0.1, 'noise')
                 ]
+
+                print(len(perturbation_params))
                 print(f"\nExperiment mode is on. Will run using pre-defined arguments of {perturbation_params}")
             else:
                 perturbation_params = [(args.num_pixels, args.jsma_perturbation, args.jsma_attack_type)]
                 print(f"\nExperiment mode is NOT on. Will run using provided arguments of {perturbation_params}")
 
-            jsma_results_df = run_jsma_experiments(model, valid_loader, device, cfg, criterion, perturbation_params, final_output_dir)
+            jsma_results_df = run_jsma_experiments(
+                model, valid_loader, device, cfg, criterion, perturbation_params, final_output_dir,
+                resizer=args.resizer, noise_sigma=args.noise, quality=args.quality, gauss_ksize=args.gauss, gauss_sigma=args.noise, bit_depth_val=args.bit_depth
+            )
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
             create_and_save_table(jsma_results_df, normal_metrics, metrics, 'num_pixels', 'JSMA_results', jsma_results_df['num_pixels'].unique(), '0', combine= True)
 
@@ -459,7 +484,10 @@ def main():
                 uap_params = [(args.uap_max_iterations, args.uap_eps, args.uap_delta, args.uap_num_classes, args.uap_targeted, args.uap_batch_size)]
                 print(f"\nExperiment mode is NOT on. Will run using provided arguments of {uap_params}")
 
-            uap_results_df = run_uap_experiments(model, valid_loader, device, cfg, criterion, uap_params, final_output_dir)
+            uap_results_df = run_uap_experiments(
+                model, valid_loader, device, cfg, criterion, uap_params, final_output_dir,
+                resizer=args.resizer, noise_sigma=args.noise, quality=args.quality, gauss_ksize=args.gauss, gauss_sigma=args.noise, bit_depth_val=args.bit_depth
+            )
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
             create_and_save_table(uap_results_df, normal_metrics, metrics, 'eps', 'UAP_results', uap_results_df['eps'].unique(), '0', combine= True)
 
@@ -478,7 +506,11 @@ def main():
                 ccp_params = [(args.epsilon, args.color_channel)]
                 print(f"\nExperiment mode is NOT on. Will run using provided arguments of {ccp_params}")
 
-            ccp_results_df = run_ccp_experiments(model, valid_loader, device, cfg, criterion, ccp_params, final_output_dir)
+            ccp_results_df = run_ccp_experiments(
+                model, valid_loader, device, cfg, criterion, ccp_params, final_output_dir,
+                resizer=args.resizer, noise_sigma=args.noise, quality=args.quality, gauss_ksize=args.gauss, gauss_sigma=args.noise, bit_depth_val=args.bit_depth
+            )
+
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
             create_and_save_table(ccp_results_df, normal_metrics, metrics, 'color_channel', 'CCP_results', ccp_results_df['color_channel'].unique(), 'None', combine= True)
 
