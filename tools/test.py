@@ -31,35 +31,24 @@ from lib.utils.utils import create_logger, select_device
 import datetime
 import matplotlib.pyplot as plt
 
+def plot_metrics(results_df, metric_list, x_param, attack_type, baseline_metrics):
+    for metric in metric_list:
+        plt.figure()
+        plt.plot(results_df[x_param], results_df[metric], marker='o', label='Experiment Results')
+        plt.axhline(y=baseline_metrics[metric], color='r', linestyle='--', label='Baseline')
+        plt.xlabel(x_param)
+        plt.ylabel(metric)
+        plt.title(f'{metric} vs {x_param} for {attack_type}')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(f'{attack_type}_{metric}_plot.png')
+        # plt.show()
+        
+
 def calculate_percentage_drop(initial, current):
     if initial == 0:
         return 0.0
     return ((initial - current) / initial) * 100
-
-def flatten_results(df):
-    flat_data = []
-    for _, row in df.iterrows():
-        flat_row = {
-            "num_pixels": row["num_pixels"],
-            "perturb_value": row["perturb_value"],
-            "attack_type": row["attack_type"],
-            "loss_avg": row["loss_avg"],
-            "time": row["time"][0],
-        }
-        
-        # Extracting values from tuples/lists
-        flat_row["da_segment_iou"] = row["da_segment_result"][0]
-        flat_row["da_segment_precision"] = row["da_segment_result"][1]
-        flat_row["da_segment_recall"] = row["da_segment_result"][2]
-        flat_row["ll_segment_iou"] = row["ll_segment_result"][0]
-        flat_row["ll_segment_precision"] = row["ll_segment_result"][1]
-        flat_row["ll_segment_recall"] = row["ll_segment_result"][2]
-        flat_row["detect_accuracy"] = row["detect_result"][0]
-        flat_row["detect_precision"] = row["detect_result"][1]
-        flat_row["detect_recall"] = row["detect_result"][2]
-        
-        flat_data.append(flat_row)
-    return pd.DataFrame(flat_data)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Test Multitask network')
@@ -173,15 +162,15 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def create_and_save_table(results_df, normal_metrics, metrics, identifier_column, output_filename_prefix, identifier_values, display_identifier):
+def create_and_save_table(results_df, normal_metrics, metrics, identifier_column, output_filename_prefix, identifier_values, display_identifier, combine=False):
     percentage_drops_df = results_df.copy()
 
     for metric in metrics:
         initial_value = normal_metrics[metric]
         percentage_drops_df[metric] = results_df[metric].apply(lambda x: calculate_percentage_drop(initial_value, x))
 
-    for identifier_value in identifier_values:
-        display_df = results_df[results_df[identifier_column] == identifier_value].copy()
+    if combine:
+        display_df = results_df.copy()
 
         # Add normal metrics as the first row
         normal_metrics_row = normal_metrics.copy()
@@ -229,9 +218,62 @@ def create_and_save_table(results_df, normal_metrics, metrics, identifier_column
         table.set_fontsize(11)
 
         # Save the table as an image
-        plt.savefig(f'{output_filename_prefix}_{identifier_value}.png', bbox_inches='tight', dpi=600)
+        plt.savefig(f'{output_filename_prefix}_combined.png', bbox_inches='tight', dpi=600)
         plt.close(fig)
-        
+
+    else:
+        for identifier_value in identifier_values:
+            display_df = results_df[results_df[identifier_column] == identifier_value].copy()
+
+            # Add normal metrics as the first row
+            normal_metrics_row = normal_metrics.copy()
+            normal_metrics_row[identifier_column] = display_identifier
+            for metric in metrics:
+                normal_metrics_row[f'{metric}_drop'] = 0
+            
+            normal_metrics_row_df = pd.DataFrame([normal_metrics_row])
+            display_df = pd.concat([normal_metrics_row_df, display_df])
+
+            # Round each metric to 4 significant figures
+            for metric in metrics:
+                display_df[metric] = display_df[metric].apply(lambda x: f'{x:.4g}')
+
+            # Add percentage drops next to metrics
+            for metric in metrics:
+                display_df[f'{metric}_drop'] = percentage_drops_df[metric].apply(lambda x: f'{x:.2f}%')
+
+            # Interleave the metric and drop columns
+            interleaved_columns = []
+            for metric in metrics:
+                interleaved_columns.append(metric)
+                interleaved_columns.append(f'{metric}_drop')
+
+            interleaved_columns = [identifier_column] + interleaved_columns
+
+            # Reorder the columns in display_df
+            display_df = display_df[interleaved_columns]
+
+            # Plotting the DataFrame
+            fig, ax = plt.subplots(figsize=(28, 16))
+            ax.axis('tight')
+            ax.axis('off')
+
+            # Create table
+            table = ax.table(cellText=display_df.values, colLabels=display_df.columns, cellLoc='center', loc='center')
+
+            # Style the drop columns to be red
+            for (i, j), cell in table.get_celld().items():
+                if j > 0 and display_df.columns[j].endswith('_drop'):
+                    cell.set_text_props(color='red')
+
+            # Increase font size
+            table.auto_set_font_size(False)
+            table.set_fontsize(11)
+
+            # Save the table as an image
+            plt.savefig(f'{output_filename_prefix}_{identifier_value}.png', bbox_inches='tight', dpi=600)
+            plt.close(fig)
+            
 def main():
     # set all the configurations
     args = parse_args()
@@ -264,7 +306,6 @@ def main():
     }
 
     # bulid up model
-    # start_time = time.time()
     print("Begin to build up model...\n")
     
     # DP mode
@@ -357,8 +398,15 @@ def main():
     'll_IoU_seg': ll_segment_results[1],
     'll_mIoU_seg': ll_segment_results[2],
     'detect_result': detect_results[2],  # mAP@0.5
-    'loss_avg': total_loss
-
+    'loss_avg': total_loss,
+    'da_acc_seg_drop': 0.0,
+    'da_IoU_seg_drop': 0.0,
+    'da_mIoU_seg_drop': 0.0,
+    'll_acc_seg_drop': 0.0,
+    'll_IoU_seg_drop': 0.0,
+    'll_mIoU_seg_drop': 0.0,
+    'detect_result_drop': 0.0,  # mAP@0.5
+    'loss_avg_drop': 0.0
     }
     
     match attack_type:
@@ -373,7 +421,11 @@ def main():
 
             fgsm_results_df = run_fgsm_experiments(model, valid_loader, device, cfg, criterion, epsilons, final_output_dir, args.fgsm_attack_type)
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
-            create_and_save_table(fgsm_results_df, normal_metrics, metrics, 'epsilon', 'FGSM_results', fgsm_results_df['epsilon'].unique(), '0')
+
+            create_and_save_table(fgsm_results_df, normal_metrics, metrics, 'epsilon', 'FGSM_results', fgsm_results_df['epsilon'].unique(), '0', combine=True)
+
+            # Plotting the metrics
+            plot_metrics(fgsm_results_df, metrics, 'epsilon', 'FGSM', normal_metrics)
         
         case "JSMA":
             # JSMA specific logic
@@ -390,7 +442,10 @@ def main():
 
             jsma_results_df = run_jsma_experiments(model, valid_loader, device, cfg, criterion, perturbation_params, final_output_dir)
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
-            create_and_save_table(jsma_results_df, normal_metrics, metrics, 'num_pixels', 'JSMA_results', jsma_results_df['num_pixels'].unique(), '0')
+            create_and_save_table(jsma_results_df, normal_metrics, metrics, 'num_pixels', 'JSMA_results', jsma_results_df['num_pixels'].unique(), '0', combine= True)
+
+            # Plotting the metrics
+            plot_metrics(jsma_results_df, metrics, 'num_pixels', 'JSMA', normal_metrics)
         
         case "UAP":
             # UAP specific logic
@@ -406,7 +461,10 @@ def main():
 
             uap_results_df = run_uap_experiments(model, valid_loader, device, cfg, criterion, uap_params, final_output_dir)
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
-            create_and_save_table(uap_results_df, normal_metrics, metrics, 'eps', 'UAP_results', uap_results_df['eps'].unique(), '0')
+            create_and_save_table(uap_results_df, normal_metrics, metrics, 'eps', 'UAP_results', uap_results_df['eps'].unique(), '0', combine= True)
+
+            # Plotting the metrics
+            plot_metrics(uap_results_df, metrics, 'eps', 'UAP', normal_metrics)
         
         case "CCP":
             # CCP specific logic
@@ -422,10 +480,13 @@ def main():
 
             ccp_results_df = run_ccp_experiments(model, valid_loader, device, cfg, criterion, ccp_params, final_output_dir)
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
-            create_and_save_table(ccp_results_df, normal_metrics, metrics, 'color_channel', 'CCP_results', ccp_results_df['color_channel'].unique(), 'None')
+            create_and_save_table(ccp_results_df, normal_metrics, metrics, 'color_channel', 'CCP_results', ccp_results_df['color_channel'].unique(), 'None', combine= True)
+
+            # Plotting the metrics
+            plot_metrics(ccp_results_df, metrics, 'color_channel', 'CCP', normal_metrics)
 
 
-                
+
     print("Test Finish")
     
     print("Starting time: ")
