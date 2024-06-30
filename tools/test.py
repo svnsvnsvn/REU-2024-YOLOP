@@ -583,12 +583,12 @@ def main():
                 print(f"\nExperimentation mode is on. Will run using pre-defined arguments of \n{ccp_params}.")
             else:
                 ccp_params = [
-                    (args.color_channel, args.epsilon,)
+                    (args.color_channel, args.epsilon)
                 ]
                 print(f"\nExperimentation mode is NOT on. Will run using provided arguments of \n{ccp_params}.")
 
             # Run CCP Experiments
-            ccp_results_df = run_ccp_experiments(model, valid_loader, device, cfg, criterion, ccp_params[0], ccp_params[1], final_output_dir)
+            ccp_results_df = run_ccp_experiments(model, valid_loader, device, cfg, criterion, ccp_params[0][0], ccp_params[0][1], final_output_dir)
             
             CCP_percentage_drops = ccp_results_df.copy()
 
