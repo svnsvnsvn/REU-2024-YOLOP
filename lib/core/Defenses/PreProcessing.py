@@ -6,7 +6,7 @@
 #OpenCV has documentation related to both Image-Resizing and JPEG Compression
 # https://docs.opencv.org/3.4/da/d6e/tutorial_py_geometric_transformations.html
 # 
-
+import torch
 import cv2
 import argparse
 import os
@@ -116,81 +116,90 @@ def cv2_imshow(image):
       ''' Function allows for displaying input image and output iamge using matplot'''
       plt.imshow(cv2.cvtColor(image. cv2.COLOR_BGR2RGB))
       plt.show()
+      
+def process_image(image_path, args):
+    image = cv2.imread(image_path)
+    if image is None:
+        raise ValueError(f"Image at path {image_path} could not be loaded.")
+
+    if args.noise and args.gauss:
+        raise ValueError("Choose either Gaussian blur OR adding noise. Gaussian blur will act as a de-noiser, rendering noise addition entirely useless.")
+
+    if args.resizer:
+        width, height = map(int, args.resizer.split('x'))
+        image = image_resizer(image, (width, height))
+        print(f"Image resized to {args.resizer}")
+
+    if args.noise:
+        image = noise(image, mean=0, sigma=args.noise)
+        print("Noise has been applied.")
+
+    if args.quality and not image_path.lower().endswith(('.jpeg', '.jpg')):
+        raise ValueError("Please do not attempt to perform JPEG compression on a non-JPEG image.")
+
+    if args.quality:
+        image = compress_jpg(image, args.quality)
+        print(f"JPEG compressed at {args.quality}% quality")
+
+    if args.gauss:
+        X, Y = map(int, args.gauss.split('x'))
+        border_type = {
+            'default': cv2.BORDER_DEFAULT,
+            'constant': cv2.BORDER_CONSTANT,
+            'reflect': cv2.BORDER_REFLECT,
+            'replicate': cv2.BORDER_REPLICATE,
+        }.get(args.border_type, cv2.BORDER_DEFAULT)
+        image = gaussian_blur(image, (X, Y), borderType=border_type)
+        print("Applied Gaussian Blurring.")
+
+    if args.bit_depth:
+        image = bit_depth(image, bits=args.bit_depth)
+        print(f"Bit depth reduced to {args.bit_depth} bits")
+
+    if args.show:
+      print("Preparing to display images...")
+
+      ''' Display Original Image '''
+      plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+      plt.title('Original Image')
+      plt.axis('off')
+      plt.show()
+
+      ''' Display Pre-Processsed Image '''
+      plt.imshow(cv2.cvtColor(args.image_output, cv2.COLOR_BGR2RGB))
+      plt.title('Processed Image')
+      plt.axis('off')
+      plt.show()
+      
+    return image
 
 def main(args):
-        
-        file_ext = os.path.splitext(args.input_image)[1].lower()       # allow for (WIDTHxHEIGHT) args
+      if not os.path.exists(args.input_image):
+            raise ValueError(f"Input directory {args.input_image} does not exist.")
+      if not os.path.exists(args.image_output):
+            os.makedirs(args.image_output)
 
-        image = cv2.imread(args.input_image)
-        
-        if image is None: 
-            raise ValueError("No image selected!")
-        
-        if args.noise and args.gauss:
-              raise ValueError("Choose either gaussian blur OR adding noise. Gaussian blur will act as a de-noiser, rendering noise addition entirely useless.")
-        
-        if args.resizer:       #resize 
-                width, height = map(int, args.resizer.split('x'))
-                image = image_resizer(image, (width, height))
-                print(f"Image resized to {args.resizer}")
-        
-        if args.noise:
-              image = noise(image, mean=0,sigma=args.noise)
-              print(f"Noise has been applied to {image}")
+      for filename in os.listdir(args.input_image):
+            if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff')):
+                  input_path = os.path.join(args.input_image, filename)
+                  processed_image = process_image(input_path, args)
+                  # Remove "perturbed" from the filename
+                  new_filename = filename.replace("_perturbed", "_defended")
+                  output_path = os.path.join(args.image_output, new_filename)
+                  cv2.imwrite(output_path, processed_image)
+                  print(f"Processed image saved to {output_path}")
 
-        if args.quality and file_ext not in ['.jpeg', '.jpg']:
-            raise ValueError("Please do not attempt to perform JPEG compression on an image that is not a JPEG! :'( ")
-        
-        if args.quality:
-            image = compress_jpg(image, args.quality)
-            print(f"JPEG compressed at {args.quality}% quality")
-        
-        if args.gauss:
-              X, Y = map(int, args.gauss.split('x'))
-              border_type = {
-                    'default': cv2.BORDER_DEFAULT,
-                    'constant': cv2.BORDER_CONSTANT,
-                    'reflect': cv2.BORDER_REFLECT,
-                    'replicate': cv2.BORDER_REPLICATE,
-                }.get(args.border_type, cv2.BORDER_DEFAULT)
-              image = gaussian_blur(image, (X, Y), borderType=border_type)
-              print(f"Applied Gaussian Blurring to {image}")
-        
-        if args.bit_depth:
-              image = bit_depth(image, bits=args.bit_depth)
-              if args.bit_depth < 1:
-                  raise ValueError("Bits must be an integer larger than one.")
-              if args.bit_depth > 8:
-                  raise ValueError("Bits must be an integer less than 8 but larger than 0")
-
-        cv2.imwrite(args.image_output, image)
-        
-
-        if args.show:
-            print("Preparing to display images...")
-            
-            ''' Display Original Image '''
-            plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-            plt.title('Original Image')
-            plt.axis('off')
-            plt.show()
-            
-            ''' Display Pre-Processsed Image '''
-            plt.imshow(cv2.cvtColor(args.image_output, cv2.COLOR_BGR2RGB))
-            plt.title('Processed Image')
-            plt.axis('off')
-            plt.show()
-        # cv2.waitkey(10)
-        # cv2.destroyAllWindows()
-        print("Image has been pre-processed.")
+            # cv2.waitkey(10)
+            # cv2.destroyAllWindows()
+      print("Image has been pre-processed.")
 
 
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Image Pre-Processor Defense")
-    parser.add_argument('input_image', type=str, help='Input image name, or full path.')
-    parser.add_argument('image_output', type=str, help='Output image name, or full path')
+    parser.add_argument('--input_image', type=str, help='Input image name, or full path.')
+    parser.add_argument('--image_output', type=str, help='Output image name, or full path')
     parser.add_argument('--resizer', type=str, default='1280x720', help='Desired WIDTHxHEIGHT of your resized image')
     parser.add_argument('--quality', type=int, help='Desired quality for JPEG compression output. 0 - 100')
     parser.add_argument('--border_type', type=str, choices=['default', 'constant', 'reflect', 'replicate'], default='default', help= 'border type for Gaussian Blurring')

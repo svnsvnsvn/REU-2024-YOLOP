@@ -44,7 +44,6 @@ def plot_metrics(results_df, metric_list, x_param, attack_type, baseline_metrics
         plt.savefig(f'{attack_type}_{metric}_plot.png')
         # plt.show()
         
-
 def calculate_percentage_drop(initial, current):
     if initial == 0:
         return 0.0
@@ -97,8 +96,6 @@ def parse_args():
                           'CCP: epsilon, color_channel)',
                         default = 1)
     
-    
-    
     # New arguments for FGSM
     parser.add_argument('--epsilon',
                         type=float,
@@ -116,7 +113,7 @@ def parse_args():
                         help="The number of pixels to be perturbed after saliency calculation.",
                         default = 10)
     parser.add_argument('--jsma_perturbation',
-                        type=int,
+                        type=float,
                         help="The number of pixels to be perturbed after saliency calculation.",
                         default = .1)
     parser.add_argument('--jsma_attack_type',
@@ -160,7 +157,7 @@ def parse_args():
                     default='R')
     
     # Defenses 
-    parser.add_argument('--resizer', default='1280x720', type=str, help='Desired WIDTHxHEIGHT of your resized image')
+    parser.add_argument('--resizer', type=str, help='Desired WIDTHxHEIGHT of your resized image')
     parser.add_argument('--quality', type=int, help='Desired quality for JPEG compression output. 0 - 100')
     parser.add_argument('--border_type', type=str, choices=['default', 'constant', 'reflect', 'replicate'], help= 'border type for Gaussian Blurring')
     parser.add_argument('--gauss', type=str, help="Apply Gaussian Blurring to image. Specify ksize as WIDTHxHEIGHT")
@@ -379,12 +376,14 @@ def main():
 
     startTime = datetime.datetime.now()
 
+    
     # Normal Validation    
     da_segment_results,ll_segment_results,detect_results, total_loss, maps, times = validate(
-    epoch,cfg, valid_loader, valid_dataset, model, criterion,
+    epoch, cfg, valid_loader, valid_dataset, model, criterion,
     final_output_dir, tb_log_dir, writer_dict,
     logger, device
     )
+    
     
     msg = 'Test:    Loss({loss:.3f})\n' \
       'Driving area Segment: Acc({da_seg_acc:.3f})    IOU ({da_seg_iou:.3f})    mIOU({da_seg_miou:.3f})\n' \
@@ -428,8 +427,7 @@ def main():
                 print(f"\nExperiment mode is {args.experiment_mode}, will be using your provided epsilon value of {epsilons}")
 
             fgsm_results_df = run_fgsm_experiments(
-                model, valid_loader, device, cfg, criterion, epsilons, final_output_dir, args.fgsm_attack_type,
-                resizer=args.resizer, noise_sigma=args.noise, quality=args.quality, gauss_ksize=args.gauss, gauss_sigma=args.noise, bit_depth_val=args.bit_depth
+                model, valid_loader, device, cfg, criterion, epsilons, final_output_dir, args.fgsm_attack_type
             )
             
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
@@ -463,11 +461,9 @@ def main():
                 print(f"\nExperiment mode is NOT on. Will run using provided arguments of {perturbation_params}")
 
             jsma_results_df = run_jsma_experiments(
-                model, valid_loader, device, cfg, criterion, perturbation_params, final_output_dir,
-                resizer=args.resizer, noise_sigma=args.noise, quality=args.quality, gauss_ksize=args.gauss, gauss_sigma=args.noise, bit_depth_val=args.bit_depth
-            )
+                model, valid_loader, device, cfg, criterion, perturbation_params, final_output_dir            )
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
-            create_and_save_table(jsma_results_df, normal_metrics, metrics, 'num_pixels', 'JSMA_results', jsma_results_df['num_pixels'].unique(), '0', combine= True)
+            create_and_save_table(jsma_results_df, normal_metrics, metrics, 'num_pixels', 'JSMA_results', jsma_results_df['num_pixels'].unique(), '0', combine= False)
 
             # Plotting the metrics
             plot_metrics(jsma_results_df, metrics, 'num_pixels', 'JSMA', normal_metrics)
@@ -476,8 +472,26 @@ def main():
             # UAP specific logic
             if args.experiment_mode:
                 uap_params = [
-                    (10, 0.03, 0.8, None, None, 12), (10, 0.05, 0.8, None, None, 12), (10, 0.1, 0.8, None, None, 12),
-                    # Add more parameter sets as needed
+                        (10, 0.1, 0.7, None, None, 10),
+                        (10, 0.6, 0.75, None, None, 11),
+                        (10, 1.1, 0.8, None, None, 12),
+                        (10, 1.6, 0.85, None, None, 13),
+                        (10, 2.1, 0.9, None, None, 14),
+                        (10, 2.6, 0.95, None, None, 15),
+                        (10, 3.1, 1.0, None, None, 16),
+                        (10, 3.6, 1.05, None, None, 17),
+                        (10, 4.1, 1.1, None, None, 18),
+                        (10, 4.6, 1.15, None, None, 19),
+                        (10, 5.1, 0.7, None, None, 20),
+                        (10, 5.6, 0.75, None, None, 21),
+                        (10, 6.1, 0.8, None, None, 22),
+                        (10, 6.6, 0.85, None, None, 23),
+                        (10, 7.1, 0.9, None, None, 24),
+                        (10, 7.6, 0.95, None, None, 25),
+                        (10, 8.1, 1.0, None, None, 26),
+                        (10, 8.6, 1.05, None, None, 27),
+                        (10, 9.1, 1.1, None, None, 28),
+                        (10, 9.6, 1.15, None, None, 29)                   # Add more parameter sets as needed
                 ]
                 print(f"\nExperiment mode is on. Will run using pre-defined arguments of {uap_params}")
             else:
@@ -485,8 +499,7 @@ def main():
                 print(f"\nExperiment mode is NOT on. Will run using provided arguments of {uap_params}")
 
             uap_results_df = run_uap_experiments(
-                model, valid_loader, device, cfg, criterion, uap_params, final_output_dir,
-                resizer=args.resizer, noise_sigma=args.noise, quality=args.quality, gauss_ksize=args.gauss, gauss_sigma=args.noise, bit_depth_val=args.bit_depth
+                model, valid_loader, device, cfg, criterion, uap_params, final_output_dir
             )
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
             create_and_save_table(uap_results_df, normal_metrics, metrics, 'eps', 'UAP_results', uap_results_df['eps'].unique(), '0', combine= True)
@@ -498,7 +511,36 @@ def main():
             # CCP specific logic
             if args.experiment_mode:
                 ccp_params = [
-                    (0.01, 'R'), (0.03, 'R'), (0.05, 'R'), (0.01, 'G'), (0.03, 'G'), (0.05, 'G'), (0.01, 'B'), (0.03, 'B'), (0.05, 'B'),
+                    # (0.01, 'R'),
+                    # (0.03, 'R'),
+                    # (0.05, 'R'),
+                    # (0.1, 'R'),
+                    # (0.5, 'R'),
+                    # (1.0, 'R'),
+                    # (2.5, 'R'),
+                    # (5.0, 'R'),
+                    # (10.0, 'R'),
+                    # (15.0, 'R'),
+                    # (0.01, 'G'),
+                    # (0.03, 'G'),
+                    # (0.05, 'G'),
+                    # (0.1, 'G'),
+                    # (0.5, 'G'),
+                    # (1.0, 'G'),
+                    # (2.5, 'G'),
+                    # (5.0, 'G'),
+                    # (10.0, 'G'),
+                    # (15.0, 'G'),
+                    (0.01, 'B'),
+                    (0.03, 'B'),
+                    (0.05, 'B'),
+                    (0.1, 'B'),
+                    (0.5, 'B'),
+                    (1.0, 'B'),
+                    (2.5, 'B'),
+                    (5.0, 'B'),
+                    (10.0, 'B'),
+                    (15.0, 'B')
                     # Add more parameter sets as needed
                 ]
                 print(f"\nExperiment mode is on. Will run using pre-defined arguments of {ccp_params}")
@@ -507,15 +549,13 @@ def main():
                 print(f"\nExperiment mode is NOT on. Will run using provided arguments of {ccp_params}")
 
             ccp_results_df = run_ccp_experiments(
-                model, valid_loader, device, cfg, criterion, ccp_params, final_output_dir,
-                resizer=args.resizer, noise_sigma=args.noise, quality=args.quality, gauss_ksize=args.gauss, gauss_sigma=args.noise, bit_depth_val=args.bit_depth
-            )
+                model, valid_loader, device, cfg, criterion, ccp_params, final_output_dir)
 
             metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
-            create_and_save_table(ccp_results_df, normal_metrics, metrics, 'color_channel', 'CCP_results', ccp_results_df['color_channel'].unique(), 'None', combine= True)
+            create_and_save_table(ccp_results_df, normal_metrics, metrics, 'epsilon', 'CCP_results', ccp_results_df['epsilon'].unique(), 'None', combine= True)
 
             # Plotting the metrics
-            plot_metrics(ccp_results_df, metrics, 'color_channel', 'CCP', normal_metrics)
+            plot_metrics(ccp_results_df, metrics, 'epsilon', 'CCP', normal_metrics)
 
 
 
