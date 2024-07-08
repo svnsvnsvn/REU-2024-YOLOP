@@ -10,6 +10,7 @@ import torch
 import cv2
 import argparse
 import os
+import json
 import sys
 import numpy as np 
 import matplotlib.pyplot as plt
@@ -173,7 +174,7 @@ def process_image(image_path, args):
       
     return image
 
-def main(args):
+'''def main(args):
       if not os.path.exists(args.input_image):
             raise ValueError(f"Input directory {args.input_image} does not exist.")
       if not os.path.exists(args.image_output):
@@ -191,8 +192,62 @@ def main(args):
 
             # cv2.waitkey(10)
             # cv2.destroyAllWindows()
-      print("Image has been pre-processed.")
+      print("Image has been pre-processed.")'''
 
+def main(args):
+    perturbed_image_dir = "/Users/annubaka/Library/Mobile Documents/com~apple~CloudDocs/Projects/YOLOP-main/Perturbed Images"
+    defended_image_dir = "/Users/annubaka/Library/Mobile Documents/com~apple~CloudDocs/Projects/YOLOP-main/Defended Images"
+    
+    if not os.path.exists(perturbed_image_dir):
+        raise ValueError(f"Input directory {perturbed_image_dir} does not exist.")
+    if not os.path.exists(defended_image_dir):
+        os.makedirs(defended_image_dir)
+      
+    defense_params = f"{args.defense}"
+      
+    if args.defense == 'resize' and args.resizer:
+        defense_params += f"_{args.resizer}"
+    elif args.defense == 'compress' and args.quality is not None:
+        defense_params += f"_{args.quality}"
+    elif args.defense == 'blur' and args.gauss:
+        defense_params += f"_{args.gauss}_{args.border_type}"
+    elif args.defense == 'noise' and args.noise is not None:
+        defense_params += f"_{args.noise}"
+    elif args.defense == 'bitdepth' and args.bit_depth is not None:
+        defense_params += f"_{args.bit_depth}"
+    
+    for subdir, dirs, files in os.walk(perturbed_image_dir):
+        print(f"subdir: {subdir} \t dirs: {dirs} \t files: {files}")
+        for dir in dirs:
+            input_dir = os.path.join(subdir, dir)
+            defense_name = f"{dir.replace('_perturbed', '')}_{defense_params}"
+            output_dir = os.path.join(defended_image_dir, defense_name)
+                  
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+                print(f"The directory did not exist but has been made.")
+                  
+            for filename in os.listdir(input_dir):
+                if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff')):
+                    input_path = os.path.join(input_dir, filename)
+                    processed_image = process_image(input_path, args)
+                    new_filename = filename.replace("_perturbed", "")
+                    output_path = os.path.join(output_dir, new_filename)
+                    cv2.imwrite(output_path, processed_image)
+                    print(f"Processed image saved to {output_path}")
+
+                    # Update metadata
+                    metadata_path = os.path.join(input_dir, f"{os.path.splitext(filename)[0]}_metadata.json")
+                    if os.path.exists(metadata_path):
+                        with open(metadata_path, 'r') as f:
+                            metadata = json.load(f)
+                        metadata['defense_params'] = defense_params
+                        new_metadata_path = os.path.join(output_dir, f"{os.path.splitext(new_filename)[0]}_metadata.json")
+                        with open(new_metadata_path, 'w') as f:
+                            json.dump(metadata, f, indent=4)
+                        print(f"Updated metadata saved to {new_metadata_path}")
+    
+    print("All images have been defended.")
 
 
 
@@ -200,6 +255,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("Image Pre-Processor Defense")
     parser.add_argument('--input_image', type=str, help='Input image name, or full path.')
     parser.add_argument('--image_output', type=str, help='Output image name, or full path')
+    parser.add_argument('--defense', type=str, required=True, help='Type of defense applied (e.g., resize, compress, blur, noise, bitdepth)')
     parser.add_argument('--resizer', type=str, default='1280x720', help='Desired WIDTHxHEIGHT of your resized image')
     parser.add_argument('--quality', type=int, help='Desired quality for JPEG compression output. 0 - 100')
     parser.add_argument('--border_type', type=str, choices=['default', 'constant', 'reflect', 'replicate'], default='default', help= 'border type for Gaussian Blurring')

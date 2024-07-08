@@ -1,0 +1,187 @@
+{
+    "name": "bca3720a-d372b6ae",
+    "frames": [
+        {
+            "timestamp": 10000,
+            "objects": [
+                {
+                    "category": "traffic sign",
+                    "id": 0,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 390.681779,
+                        "y1": 322.277303,
+                        "x2": 414.306777,
+                        "y2": 360.5273
+                    }
+                },
+                {
+                    "category": "traffic sign",
+                    "id": 1,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 634.806748,
+                        "y1": 342.527301,
+                        "x2": 648.306747,
+                        "y2": 362.777298
+                    }
+                },
+                {
+                    "category": "traffic light",
+                    "id": 2,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": false,
+                        "trafficLightColor": "green"
+                    },
+                    "box2d": {
+                        "x1": 647.181747,
+                        "y1": 367.277298,
+                        "x2": 657.306744,
+                        "y2": 379.652296
+                    }
+                },
+                {
+                    "category": "traffic sign",
+                    "id": 3,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 138.68181,
+                        "y1": 375.152297,
+                        "x2": 174.681806,
+                        "y2": 422.402291
+                    }
+                },
+                {
+                    "category": "area/drivable",
+                    "id": 4,
+                    "attributes": {},
+                    "poly2d": [
+                        [
+                            557.549805,
+                            425.249851,
+                            "L"
+                        ],
+                        [
+                            612.899785,
+                            422.549852,
+                            "L"
+                        ],
+                        [
+                            1213.649575,
+                            719.549748,
+                            "L"
+                        ],
+                        [
+                            310.499891,
+                            719.549748,
+                            "L"
+                        ],
+                        [
+                            557.549805,
+                            425.249851,
+                            "L"
+                        ]
+                    ]
+                },
+                {
+                    "category": "lane/road curb",
+                    "id": 5,
+                    "attributes": {
+                        "direction": "parallel",
+                        "style": "solid"
+                    },
+                    "poly2d": [
+                        [
+                            390.592984,
+                            436.695763,
+                            "L"
+                        ],
+                        [
+                            129.343906,
+                            502.008032,
+                            "L"
+                        ]
+                    ]
+                },
+                {
+                    "category": "lane/road curb",
+                    "id": 6,
+                    "attributes": {
+                        "direction": "parallel",
+                        "style": "solid"
+                    },
+                    "poly2d": [
+                        [
+                            641.597,
+                            431.573232,
+                            "L"
+                        ],
+                        [
+                            1169.217687,
+                            685.138513,
+                            "L"
+                        ]
+                    ]
+                },
+                {
+                    "category": "lane/double white",
+                    "id": 7,
+                    "attributes": {
+                        "direction": "parallel",
+                        "style": "solid"
+                    },
+                    "poly2d": [
+                        [
+                            537.686227,
+                            437.325425,
+                            "L"
+                        ],
+                        [
+                            235.037243,
+                            717.813975,
+                            "L"
+                        ]
+                    ]
+                },
+                {
+                    "category": "lane/double white",
+                    "id": 8,
+                    "attributes": {
+                        "direction": "parallel",
+                        "style": "solid"
+                    },
+                    "poly2d": [
+                        [
+                            548.054134,
+                            437.743808,
+                            "L"
+                        ],
+                        [
+                            300.935536,
+                            720.487999,
+                            "L"
+                        ]
+                    ]
+                }
+            ]
+        }
+    ],
+    "attributes": {
+        "weather": "rainy",
+        "scene": "residential",
+        "timeofday": "night"
+    }
+}

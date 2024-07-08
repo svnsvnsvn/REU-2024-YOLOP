@@ -1,0 +1,132 @@
+{
+    "name": "c84744c1-4307c1e2",
+    "frames": [
+        {
+            "timestamp": 10000,
+            "objects": [
+                {
+                    "category": "person",
+                    "id": 0,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 219.604712,
+                        "y1": 247.0553,
+                        "x2": 348.123378,
+                        "y2": 581.453384
+                    }
+                },
+                {
+                    "category": "car",
+                    "id": 1,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 351.866641,
+                        "y1": 238.321022,
+                        "x2": 690.007987,
+                        "y2": 556.498303
+                    }
+                },
+                {
+                    "category": "car",
+                    "id": 2,
+                    "attributes": {
+                        "occluded": true,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 706.228788,
+                        "y1": 361.848672,
+                        "x2": 756.13895,
+                        "y2": 436.713916
+                    }
+                },
+                {
+                    "category": "car",
+                    "id": 3,
+                    "attributes": {
+                        "occluded": true,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 318.177281,
+                        "y1": 328.159314,
+                        "x2": 351.866639,
+                        "y2": 375.573968
+                    }
+                },
+                {
+                    "category": "area/drivable",
+                    "id": 4,
+                    "attributes": {},
+                    "poly2d": [
+                        [
+                            309.443003,
+                            571.471353,
+                            "L"
+                        ],
+                        [
+                            172.190057,
+                            663.805152,
+                            "L"
+                        ],
+                        [
+                            531.543223,
+                            601.417449,
+                            "C"
+                        ],
+                        [
+                            949.540827,
+                            628.868038,
+                            "C"
+                        ],
+                        [
+                            1280.195648,
+                            668.796167,
+                            "C"
+                        ],
+                        [
+                            1280.195648,
+                            585.196647,
+                            "L"
+                        ],
+                        [
+                            889.648631,
+                            465.412258,
+                            "L"
+                        ],
+                        [
+                            706.228788,
+                            461.668996,
+                            "L"
+                        ],
+                        [
+                            688.760233,
+                            567.728089,
+                            "L"
+                        ],
+                        [
+                            309.443003,
+                            571.471353,
+                            "L"
+                        ]
+                    ]
+                }
+            ]
+        }
+    ],
+    "attributes": {
+        "weather": "overcast",
+        "scene": "gas stations",
+        "timeofday": "dawn/dusk"
+    }
+}

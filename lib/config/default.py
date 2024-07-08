@@ -57,7 +57,7 @@ _C.DATASET.LANEROOT = 'lib/dataset/ll_seg_annotations' #'/home/zwt/bdd/bdd_lane_
 
 _C.DATASET.DATASET = 'BddDataset'
 _C.DATASET.TRAIN_SET = 'train'
-_C.DATASET.TEST_SET = 'val' #'defended' 'val'
+_C.DATASET.TEST_SET = 'val'
 _C.DATASET.DATA_FORMAT = 'jpg'
 _C.DATASET.SELECT_DATA = False
 _C.DATASET.ORG_IMG_SIZE = [720, 1280]
@@ -136,15 +136,16 @@ def update_config(cfg, args):
 
     if args.logDir:
         cfg.LOG_DIR = args.logDir
-    # Update dataset-specific configurations
-    if args.dataset == 'Carla':
-        _C.DATASET.DATAROOT = 'lib/dataset/images/carla_imageset'
-        cfg.DATASET.DATASET = 'CarlaDataset'
-        cfg.DATASET.TRAIN_SET = 'train'
-        cfg.DATASET.TEST_SET = '' # was val, but there's no train or val specific images currently
-        cfg.DATASET.DATA_FORMAT = 'jpg'
-        cfg.DATASET.SELECT_DATA = False
-        cfg.DATASET.ORG_IMG_SIZE = [1080, 1920]
-        _C.DATASET.LABELROOT = 'lib/dataset/carla_ds/labels/Video_000' #'/home/zwt/bdd/bdd100k/labels/100k'      # the path of det_annotations folder
+                
+    # # Update dataset-specific configurations
+    # if args.dataset == 'Carla':
+    #     _C.DATASET.DATAROOT = 'lib/dataset/images/carla_imageset'
+    #     cfg.DATASET.DATASET = 'CarlaDataset'
+    #     cfg.DATASET.TRAIN_SET = 'train'
+    #     cfg.DATASET.TEST_SET = '' # was val, but there's no train or val specific images currently
+    #     cfg.DATASET.DATA_FORMAT = 'jpg'
+    #     cfg.DATASET.SELECT_DATA = False
+    #     cfg.DATASET.ORG_IMG_SIZE = [1080, 1920]
+    #     _C.DATASET.LABELROOT = 'lib/dataset/carla_ds/labels/Video_000' #'/home/zwt/bdd/bdd100k/labels/100k'      # the path of det_annotations folder
 
     cfg.freeze()

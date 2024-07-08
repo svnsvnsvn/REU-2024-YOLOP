@@ -1,0 +1,132 @@
+{
+    "name": "c090895d-02949f2b",
+    "frames": [
+        {
+            "timestamp": 10000,
+            "objects": [
+                {
+                    "category": "bus",
+                    "id": 0,
+                    "attributes": {
+                        "occluded": true,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 591.435416,
+                        "y1": 385.555999,
+                        "x2": 656.318627,
+                        "y2": 461.668995
+                    }
+                },
+                {
+                    "category": "bus",
+                    "id": 1,
+                    "attributes": {
+                        "occluded": true,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 650.079856,
+                        "y1": 401.776802,
+                        "x2": 680.025953,
+                        "y2": 464.164505
+                    }
+                },
+                {
+                    "category": "car",
+                    "id": 2,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 542.773009,
+                        "y1": 391.794769,
+                        "x2": 627.620282,
+                        "y2": 464.164504
+                    }
+                },
+                {
+                    "category": "truck",
+                    "id": 3,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": true,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 0,
+                        "y1": 23.707327,
+                        "x2": 394.290278,
+                        "y2": 521.56119
+                    }
+                },
+                {
+                    "category": "area/drivable",
+                    "id": 4,
+                    "attributes": {},
+                    "poly2d": [
+                        [
+                            765.006495,
+                            475.874674,
+                            "L"
+                        ],
+                        [
+                            965.818856,
+                            529.874637,
+                            "L"
+                        ],
+                        [
+                            846.006439,
+                            516.374645,
+                            "C"
+                        ],
+                        [
+                            748.131507,
+                            516.374645,
+                            "C"
+                        ],
+                        [
+                            628.319089,
+                            526.499638,
+                            "C"
+                        ],
+                        [
+                            599.631609,
+                            502.874654,
+                            "C"
+                        ],
+                        [
+                            557.444138,
+                            496.124659,
+                            "C"
+                        ],
+                        [
+                            462.944203,
+                            496.124659,
+                            "C"
+                        ],
+                        [
+                            538.881651,
+                            464.06218,
+                            "L"
+                        ],
+                        [
+                            765.006495,
+                            475.874674,
+                            "L"
+                        ]
+                    ]
+                }
+            ]
+        }
+    ],
+    "attributes": {
+        "weather": "clear",
+        "scene": "residential",
+        "timeofday": "daytime"
+    }
+}

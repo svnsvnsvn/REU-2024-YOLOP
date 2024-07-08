@@ -1,0 +1,127 @@
+{
+    "name": "bb793416-9423221d",
+    "frames": [
+        {
+            "timestamp": 10000,
+            "objects": [
+                {
+                    "category": "traffic sign",
+                    "id": 0,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 404.504708,
+                        "y1": 93.387597,
+                        "x2": 453.471988,
+                        "y2": 128.888875
+                    }
+                },
+                {
+                    "category": "traffic sign",
+                    "id": 1,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 443.678532,
+                        "y1": 209.684887,
+                        "x2": 460.81708,
+                        "y2": 231.720163
+                    }
+                },
+                {
+                    "category": "traffic sign",
+                    "id": 2,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 618.736558,
+                        "y1": 190.097975,
+                        "x2": 627.305831,
+                        "y2": 213.357433
+                    }
+                },
+                {
+                    "category": "traffic sign",
+                    "id": 3,
+                    "attributes": {
+                        "occluded": true,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 619.96074,
+                        "y1": 66.455593,
+                        "x2": 641.996016,
+                        "y2": 98.284325
+                    }
+                },
+                {
+                    "category": "area/drivable",
+                    "id": 4,
+                    "attributes": {},
+                    "poly2d": [
+                        [
+                            0,
+                            343.132362,
+                            "L"
+                        ],
+                        [
+                            0,
+                            586.4444,
+                            "L"
+                        ],
+                        [
+                            417.997605,
+                            450.439209,
+                            "C"
+                        ],
+                        [
+                            1030.366006,
+                            466.805377,
+                            "C"
+                        ],
+                        [
+                            1280.195648,
+                            511.579158,
+                            "C"
+                        ],
+                        [
+                            1280.195648,
+                            401.776803,
+                            "L"
+                        ],
+                        [
+                            766.120982,
+                            291.974445,
+                            "C"
+                        ],
+                        [
+                            462.91675,
+                            278.249153,
+                            "C"
+                        ],
+                        [
+                            0,
+                            343.132362,
+                            "C"
+                        ]
+                    ]
+                }
+            ]
+        }
+    ],
+    "attributes": {
+        "weather": "clear",
+        "scene": "city street",
+        "timeofday": "night"
+    }
+}

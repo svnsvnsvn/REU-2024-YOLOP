@@ -1,5 +1,6 @@
 import numpy as np
 import json
+import os
 
 from .AutoDriveDataset import AutoDriveDataset
 from .convert import convert, id_dict, id_dict_single
@@ -32,7 +33,11 @@ class BddDataset(AutoDriveDataset):
         for mask in tqdm(list(self.mask_list)):
             mask_path = str(mask)
             label_path = mask_path.replace(str(self.mask_root), str(self.label_root)).replace(".png", ".json")
-            image_path = mask_path.replace(str(self.mask_root), str(self.img_root)).replace(".png", ".jpg")
+            # image_path = mask_path.replace(str(self.mask_root), str(self.img_root)).replace(".png", ".jpg") #UNCOMMENT ME IF YOU ARE RUNNING VALIDATIONS WITHOUT USING PRE-PROCESSED PERTURBED THEN DEFENDED IMAGES
+            
+            # Extract the original base name without unique identifiers
+            base_name = os.path.basename(mask_path).split('_')[0] # comment me out
+            image_path = os.path.join(str(self.img_root), f"{base_name}.jpg") #comment me out
             lane_path = mask_path.replace(str(self.mask_root), str(self.lane_root))
             with open(label_path, 'r') as f:
                 label = json.load(f)

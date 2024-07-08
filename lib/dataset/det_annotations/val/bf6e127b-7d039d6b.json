@@ -1,0 +1,127 @@
+{
+    "name": "bf6e127b-7d039d6b",
+    "frames": [
+        {
+            "timestamp": 10000,
+            "objects": [
+                {
+                    "category": "car",
+                    "id": 0,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 872.180076,
+                        "y1": 325.913353,
+                        "x2": 1134.208426,
+                        "y2": 441.954479
+                    }
+                },
+                {
+                    "category": "car",
+                    "id": 1,
+                    "attributes": {
+                        "occluded": true,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 1090.537034,
+                        "y1": 332.152122,
+                        "x2": 1242.763029,
+                        "y2": 416.999396
+                    }
+                },
+                {
+                    "category": "car",
+                    "id": 2,
+                    "attributes": {
+                        "occluded": true,
+                        "truncated": true,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 1210.321421,
+                        "y1": 335.895384,
+                        "x2": 1276.452386,
+                        "y2": 416.999396
+                    }
+                },
+                {
+                    "category": "traffic sign",
+                    "id": 3,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 1078.059494,
+                        "y1": 121.281689,
+                        "x2": 1179.127571,
+                        "y2": 149.980032
+                    }
+                },
+                {
+                    "category": "area/drivable",
+                    "id": 4,
+                    "attributes": {},
+                    "poly2d": [
+                        [
+                            0,
+                            554.843226,
+                            "L"
+                        ],
+                        [
+                            434.574932,
+                            522.596801,
+                            "C"
+                        ],
+                        [
+                            1011.939478,
+                            593.231826,
+                            "C"
+                        ],
+                        [
+                            1280.6437,
+                            625.47825,
+                            "C"
+                        ],
+                        [
+                            1280.6437,
+                            539.487786,
+                            "L"
+                        ],
+                        [
+                            909.05803,
+                            493.421465,
+                            "L"
+                        ],
+                        [
+                            852.242902,
+                            410.502089,
+                            "L"
+                        ],
+                        [
+                            0,
+                            441.212969,
+                            "L"
+                        ],
+                        [
+                            0,
+                            554.843226,
+                            "L"
+                        ]
+                    ]
+                }
+            ]
+        }
+    ],
+    "attributes": {
+        "weather": "clear",
+        "scene": "city street",
+        "timeofday": "night"
+    }
+}

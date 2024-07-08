@@ -17,39 +17,62 @@ def clean_str(s):
     # Cleans a string by replacing special characters with underscore _
     return re.sub(pattern="[|@#!¡·$€%&()=?¿^*;:,¨´><+]", repl="_", string=s)
 
-def create_logger(cfg, cfg_path, phase='train', rank=-1, attack_type=None):
+def create_logger(cfg, cfg_path, phase='train', rank=-1, attack_type=None, epsilon=None, channel=None, step_decay=None, num_pixels=None, defense_type=None, experiment_number=0):
     # set up logger dir
     dataset = cfg.DATASET.DATASET
     dataset = dataset.replace(':', '_')
     model = cfg.MODEL.NAME
     cfg_path = os.path.basename(cfg_path).split('.')[0]
     attack_status = attack_type if attack_type else 'NoAttack'
-
-
+    defense_status = defense_type if defense_type else 'NoDefense'
+    
     if rank in [-1, 0]:
         time_str = time.strftime('%Y-%m-%d-%H-%M')
-        log_file = '{}_{}_{}.log'.format(cfg_path, time_str, phase)
-        # set up tensorboard_log_dir
-        tensorboard_log_dir = Path(cfg.LOG_DIR) / dataset / model / \
-                                  (cfg_path + '_' + time_str + '_' + attack_status)
-        final_output_dir = tensorboard_log_dir
-        if not tensorboard_log_dir.exists():
-            print('=> creating {}'.format(tensorboard_log_dir))
-            tensorboard_log_dir.mkdir(parents=True)
+        run_dir = Path(cfg.LOG_DIR) / dataset / model / \
+            (cfg_path + '_' + time_str + '_' + attack_status + '_' + defense_status)
 
-        final_log_file = tensorboard_log_dir / log_file
+        if not run_dir.exists():
+            print(f'=> creating {run_dir}')
+            run_dir.mkdir(parents=True, exist_ok=True)
+
+        log_file = run_dir / f'{cfg_path}_{time_str}_{phase}_{attack_status}_{defense_status}.log'
         head = '%(asctime)-15s %(message)s'
-        logging.basicConfig(filename=str(final_log_file),
-                            format=head)
+        
+        # Ensure to reset logging config to avoid conflicts
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
+
+        logging.basicConfig(filename=str(log_file), format=head)
         logger = logging.getLogger()
         logger.setLevel(logging.INFO)
         console = logging.StreamHandler()
         logging.getLogger('').addHandler(console)
 
-        return logger, str(final_output_dir), str(tensorboard_log_dir)
+        return logger, str(run_dir), str(run_dir)
     else:
         return None, None, None
 
+def create_experiment_logger(base_dir, experiment_number, attack_type, epsilon=None, channel=None, step_decay=None, num_pixels=None):
+    time_str = time.strftime('%Y-%m-%d-%H-%M')
+    exp_dir = Path(base_dir) / f'exp_{experiment_number}_epsilon_{epsilon}'
+    
+    if not exp_dir.exists():
+        exp_dir.mkdir(parents=True, exist_ok=True)
+
+    log_file = exp_dir / f'exp_{experiment_number}_{time_str}_{attack_type}.log'
+    head = '%(asctime)-15s %(message)s'
+    
+    # Ensure to reset logging config to avoid conflicts
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
+    logging.basicConfig(filename=str(log_file), format=head)
+    logger = logging.getLogger(f'exp_{experiment_number}')
+    logger.setLevel(logging.INFO)
+    console = logging.StreamHandler()
+    logging.getLogger('').addHandler(console)
+
+    return logger, str(exp_dir)
 
 def select_device(logger=None, device='', batch_size=None):
     # device = 'cpu' or '0' or '0,1,2,3'

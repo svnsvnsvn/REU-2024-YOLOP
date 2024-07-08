@@ -1,0 +1,112 @@
+{
+    "name": "b5f2f881-edaf9a01",
+    "frames": [
+        {
+            "timestamp": 10000,
+            "objects": [
+                {
+                    "category": "traffic sign",
+                    "id": 0,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 583.199797,
+                        "y1": 607.499787,
+                        "x2": 604.799789,
+                        "y2": 635.849777
+                    }
+                },
+                {
+                    "category": "traffic sign",
+                    "id": 1,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 661.499767,
+                        "y1": 635.849777,
+                        "x2": 681.74976,
+                        "y2": 660.149769
+                    }
+                },
+                {
+                    "category": "car",
+                    "id": 2,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": false,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 260.549909,
+                        "y1": 664.199767,
+                        "x2": 303.749895,
+                        "y2": 689.849758
+                    }
+                },
+                {
+                    "category": "bus",
+                    "id": 3,
+                    "attributes": {
+                        "occluded": false,
+                        "truncated": true,
+                        "trafficLightColor": "none"
+                    },
+                    "box2d": {
+                        "x1": 1.350001,
+                        "y1": 637.199778,
+                        "x2": 143.099952,
+                        "y2": 712.799752
+                    }
+                },
+                {
+                    "category": "area/drivable",
+                    "id": 4,
+                    "attributes": {},
+                    "poly2d": [
+                        [
+                            248.303055,
+                            719.954082,
+                            "L"
+                        ],
+                        [
+                            350.618886,
+                            694.999002,
+                            "C"
+                        ],
+                        [
+                            432.970652,
+                            683.769215,
+                            "C"
+                        ],
+                        [
+                            529.199815,
+                            674.999764,
+                            "C"
+                        ],
+                        [
+                            525.149816,
+                            719.549748,
+                            "L"
+                        ],
+                        [
+                            248.303055,
+                            719.954082,
+                            "L"
+                        ]
+                    ]
+                }
+            ]
+        }
+    ],
+    "attributes": {
+        "weather": "clear",
+        "scene": "city street",
+        "timeofday": "dawn/dusk"
+    }
+}
