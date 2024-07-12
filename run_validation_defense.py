@@ -155,7 +155,16 @@ def run_validation(cfg, args, attack_params=None, defense_params=None, baseline=
 
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
-    valid_dataset = dataset.BddDataset(cfg, is_train=False, inputsize=cfg.MODEL.IMAGE_SIZE, transform=transforms.Compose([transforms.ToTensor(), normalize]), validation_type=validation_type)
+    valid_dataset = eval('dataset.' + cfg.DATASET.DATASET)(
+        cfg=cfg,
+        is_train=False,
+        inputsize=cfg.MODEL.IMAGE_SIZE,
+        transform=transforms.Compose([
+            transforms.ToTensor(),
+            normalize,
+        ]),
+        validation_type=validation_type
+        )
 
     valid_loader = DataLoaderX(
         valid_dataset,
@@ -180,10 +189,10 @@ def run_validation(cfg, args, attack_params=None, defense_params=None, baseline=
     )
 
     msg = ('Test:    Loss({loss:.3f})\n'
-           'Driving area Segment: Acc({da_seg_acc:.3f})    IOU ({da_seg_iou:.3f})    mIOU({da_seg_miou:.3f})\n'
-           'Lane line Segment: Acc({ll_seg_acc:.3f})    IOU ({ll_seg_iou:.3f})  mIOU({ll_seg_miou:.3f})\n'
-           'Detect: P({p:.3f})  R({r:.3f})  mAP@0.5({map50:.3f})  mAP@0.5:0.95({map:.3f})\n'
-           'Time: inference({t_inf:.4f}s/frame)  nms({t_nms:.4f}s/frame)').format(
+            'Driving area Segment: Acc({da_seg_acc:.3f})    IOU ({da_seg_iou:.3f})    mIOU({da_seg_miou:.3f})\n'
+            'Lane line Segment: Acc({ll_seg_acc:.3f})    IOU ({ll_seg_iou:.3f})  mIOU({ll_seg_miou:.3f})\n'
+            'Detect: P({p:.3f})  R({r:.3f})  mAP@0.5({map50:.3f})  mAP@0.5:0.95({map:.3f})\n'
+            'Time: inference({t_inf:.4f}s/frame)  nms({t_nms:.4f}s/frame)').format(
         loss=total_loss, da_seg_acc=da_segment_results[0], da_seg_iou=da_segment_results[1], da_seg_miou=da_segment_results[2],
         ll_seg_acc=ll_segment_results[0], ll_seg_iou=ll_segment_results[1], ll_seg_miou=ll_segment_results[2],
         p=detect_results[0], r=detect_results[1], map50=detect_results[2], map=detect_results[3],
