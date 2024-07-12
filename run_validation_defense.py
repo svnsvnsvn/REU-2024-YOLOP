@@ -19,6 +19,15 @@ from lib.models import get_net
 from lib.utils.utils import create_logger, select_device
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
+from tqdm import tqdm
+from datetime import datetime
+
+from lib.core.Attacks.JSMA import calculate_saliency, find_and_perturb_highest_scoring_pixels
+from lib.core.Attacks.UAP import uap_sgd_yolop
+from lib.core.Attacks.FGSM import fgsm_attack
+from lib.core.Attacks.CCP import color_channel_perturbation
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run validation for different attacks and defenses")
@@ -39,22 +48,87 @@ def parse_args():
                         help='path to the Defended Images directory',
                         type=str,
                         default='DefendedImages')
+    parser.add_argument('--early_stop_threshold',
+                        help='early stopping threshold for total loss',
+                        type=float,
+                        default=0.65)  
+    parser.add_argument('--batch_size',
+                        help='number of combinations to process in each batch',
+                        type=int,
+                        default=10)
     return parser.parse_args()
 
-def run_validation(cfg, args, attack_params, defense_params):
-    attack_type = attack_params['attack_type']
-    defense_type = defense_params
+def apply_attack(valid_loader, model, device, attack_params, criterion, cfg):
+    if attack_params['attack_type'] == 'FGSM':
+        epsilon = attack_params['epsilon']
+        perturbed_images = []
+        for img, target, paths, shapes in valid_loader:
+            img = img.to(device)
+            img.requires_grad = True
+            output = model(img)
+            loss = criterion(output, target)
+            model.zero_grad()
+            loss.backward()
+            img_grad = img.grad.data
+            perturbed_image = fgsm_attack(img, epsilon, img_grad)
+            perturbed_images.append(perturbed_image)
+        return torch.cat(perturbed_images)
 
-    cfg.defrost()
-    cfg.DATASET.TEST_SET = f'{attack_type}/{defense_type}'
-    cfg.freeze()
+    elif attack_params['attack_type'] == 'JSMA':
+        saliency_maps = calculate_saliency(model, valid_loader, device, cfg, criterion)
+        images = []
+        for batch in valid_loader:
+            images.extend(batch[0].numpy())
+            break
+        perturbed_images, _ = find_and_perturb_highest_scoring_pixels(images, saliency_maps, attack_params['num_pixels'], attack_params['jsma_perturbation'], perturbation_type=attack_params['jsma_attack_type'])
+        return perturbed_images
 
-    # set the logger, tb_log_dir means tensorboard logdir
+    elif attack_params['attack_type'] == 'UAP':
+        uap, loss_history = uap_sgd_yolop(model, valid_loader, device, attack_params['uap_max_iterations'], attack_params['uap_eps'], criterion, attack_params['uap_delta'], attack_params['uap_num_classes'], attack_params['uap_targeted'], attack_params['uap_batch_size'])
+        images = []
+        for batch in valid_loader:
+            images.extend(batch[0].numpy())
+            break
+        perturbed_images = torch.clamp(torch.tensor(images, dtype=torch.float32) + uap.unsqueeze(0), 0, 1)
+        return perturbed_images
+
+    elif attack_params['attack_type'] == 'CCP':
+        epsilon = attack_params['epsilon']
+        channel = attack_params['channel']
+        perturbed_images = []
+        for img, target, paths, shapes in valid_loader:
+            img = img.to(device)
+            img.requires_grad = True
+            output = model(img)
+            loss = criterion(output, target)
+            model.zero_grad()
+            loss.backward()
+            img_grad = img.grad.data
+            perturbed_image = color_channel_perturbation(img, epsilon, img_grad, channel)
+            perturbed_images.append(perturbed_image)
+        return torch.cat(perturbed_images)
+    return None
+
+def run_validation(cfg, args, attack_params=None, defense_params=None, baseline=False, defended_images_dir=None):
+    if baseline:
+        cfg.defrost()
+        cfg.DATASET.TEST_SET = 'val'
+        cfg.freeze()
+        validation_type = 'normal'
+        attack_type = 'Baseline'
+        defense_type = 'None'
+    elif defended_images_dir:
+        validation_type = 'defense'
+        cfg.defrost()
+        cfg.DATASET.TEST_SET = defended_images_dir
+        cfg.freeze()
+    else:
+        attack_type = attack_params['attack_type']
+        defense_type = 'None'
+        validation_type = 'val'
+
     logger, final_output_dir, tb_log_dir = create_logger(
         cfg, cfg.LOG_DIR, 'test', attack_type=attack_type, defense_type=defense_type)
-
-    logger.info(pprint.pformat(args))
-    logger.info(cfg)
 
     writer_dict = {
         'writer': SummaryWriter(log_dir=tb_log_dir),
@@ -62,16 +136,12 @@ def run_validation(cfg, args, attack_params, defense_params):
         'valid_global_steps': 0,
     }
 
-    # Build the model
     device = select_device(logger, batch_size=cfg.TEST.BATCH_SIZE_PER_GPU * len(cfg.GPUS)) if not cfg.DEBUG else select_device(logger, 'cpu')
     model = get_net(cfg)
-
-    # Define loss function (criterion) and optimizer
     criterion = get_loss(cfg, device=device)
 
-    # Load checkpoint model
     model_dict = model.state_dict()
-    checkpoint_file = args.weights[0]  # args.weights
+    checkpoint_file = args.weights[0]
     logger.info(f"=> loading checkpoint '{checkpoint_file}'")
     checkpoint = torch.load(checkpoint_file)
     checkpoint_dict = checkpoint['state_dict']
@@ -83,37 +153,30 @@ def run_validation(cfg, args, attack_params, defense_params):
     model.gr = 1.0
     model.nc = 1
 
-    # Data loading
-    normalize = transforms.Normalize(
-        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-    )
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
-    valid_dataset = eval('dataset.' + cfg.DATASET.DATASET)(
-        cfg=cfg,
-        is_train=False,
-        inputsize=cfg.MODEL.IMAGE_SIZE,
-        transform=transforms.Compose([
-            transforms.ToTensor(),
-            normalize,
-        ])
-    )
+    valid_dataset = dataset.BddDataset(cfg, is_train=False, inputsize=cfg.MODEL.IMAGE_SIZE, transform=transforms.Compose([transforms.ToTensor(), normalize]), validation_type=validation_type)
 
     valid_loader = DataLoaderX(
         valid_dataset,
         batch_size=cfg.TEST.BATCH_SIZE_PER_GPU * len(cfg.GPUS),
         shuffle=False,
-        num_workers=0,  # cfg.WORKERS # Must be 0 or will cause pickling error
+        num_workers=0,
         pin_memory=False,
         collate_fn=dataset.AutoDriveDataset.collate_fn
     )
 
-    epoch = 0  # special for test
+    epoch = 0
+    results = []
+    
+    if validation_type == 'attack':
+        # Apply attack
+        perturbed_images = apply_attack(valid_loader, model, device, attack_params, criterion, cfg)
 
-    # Normal Validation    
     da_segment_results, ll_segment_results, detect_results, total_loss, maps, times = validate(
         epoch, cfg, valid_loader, valid_dataset, model, criterion,
         output_dir=final_output_dir, tb_log_dir=tb_log_dir, writer_dict=writer_dict,
-        logger=logger, device=device
+        logger=logger, device=device, perturbed_images=perturbed_images if validation_type == 'attack' else None
     )
 
     msg = ('Test:    Loss({loss:.3f})\n'
@@ -128,10 +191,8 @@ def run_validation(cfg, args, attack_params, defense_params):
 
     logger.info(msg)
     
-    # Return results for logging
-    return {
+    results.append({
         'attack_type': attack_type,
-        'attack_params': attack_params,
         'defense_type': defense_type,
         'total_loss': total_loss,
         'da_seg_acc': da_segment_results[0],
@@ -146,20 +207,70 @@ def run_validation(cfg, args, attack_params, defense_params):
         'map': detect_results[3],
         't_inf': times[0],
         't_nms': times[1]
-    }
+    })
+
+    return results
+
+def save_results(results, file_name, directory='.'):
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    file_path = os.path.join(directory, file_name)
+    df = pd.DataFrame(results)
+    df.to_csv(file_path, index=False)
+    print(f"Saved results to {file_path}")
+
+def prioritize_combinations(task_list):
+    prioritized_combinations = []
+    for attack_params, defense_params in task_list:
+        attack_type = attack_params['attack_type']
+        if attack_type == 'FGSM':
+            if defense_params in ['resizing', 'compression', 'gaussian_blur']:
+                prioritized_combinations.insert(0, (attack_params, defense_params))
+        elif attack_type == 'JSMA':
+            if defense_params in ['resizing', 'compression', 'gaussian_blur']:
+                prioritized_combinations.insert(0, (attack_params, defense_params))
+        elif attack_type == 'UAP':
+            if defense_params in ['resizing', 'compression']:
+                prioritized_combinations.insert(0, (attack_params, defense_params))
+        elif attack_type == 'CCP':
+            if defense_params in ['compression', 'gaussian_blur']:
+                prioritized_combinations.insert(0, (attack_params, defense_params))
+        else:
+            prioritized_combinations.append((attack_params, defense_params))
+    return prioritized_combinations
+
+def plot_performance(df, metric, title, y_label, filename):
+    plt.figure(figsize=(14, 8))
+    sns.set_palette("gray")  # Set the color palette to grayscale
+    sns.barplot(data=df, x='defense_type', y=metric, hue='attack_type')
+    plt.title(title, color='black')
+    plt.xlabel('Defense Type', color='black')
+    plt.ylabel(y_label, color='black')
+    plt.xticks(rotation=45, color='black')
+    plt.yticks(color='black')
+    plt.legend(title='Attack Type', facecolor='white')
+    plt.tight_layout()
+    plt.savefig(filename, facecolor='white')
+    plt.show()
 
 def main():
-    # Parse arguments and update config
     args = parse_args()
     update_config(cfg, args)
 
     results = []
+    skipped_combinations = []
     seen_combinations = set()
+    
+    save_dir = 'results'  # Specify your desired directory here
+
+    # Create a unique identifier for the current run
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     if not os.path.exists(args.defended_images_dir):
         print(f"Directory does not exist: {args.defended_images_dir}")
         return
 
+    task_list = []
     for root, dirs, files in os.walk(args.defended_images_dir):
         for file in files:
             if file.endswith('_metadata.json'):
@@ -175,40 +286,69 @@ def main():
                 }
                 defense_params = metadata['defense_params']
 
-                # Create a unique identifier for each combination
                 combination_id = (attack_params['attack_type'], defense_params, attack_params.get('epsilon'), attack_params.get('num_pixels'), attack_params.get('channel'))
 
                 if combination_id in seen_combinations:
-                    print(f"Skipping already processed combination: {combination_id}")
                     continue
 
                 seen_combinations.add(combination_id)
-                
-                print(f"Running validation for {attack_params['attack_type']} attack with {defense_params} defense and parameters {attack_params}")
-                result = run_validation(cfg, args, attack_params, defense_params)
-                results.append(result)
-                print(f"Validation result: {result}")
+                task_list.append((attack_params, defense_params))
+
+    task_list = prioritize_combinations(task_list)
+
+    # Baseline validation
+    print("\nRunning baseline validation")
+    baseline_result = run_validation(cfg, args, baseline=True)
+    results.extend(baseline_result)
+
+    # Use tqdm for progress bar
+    for i in tqdm(range(0, len(task_list), args.batch_size), desc="Validating combinations"):
+        batch = task_list[i:i + args.batch_size]
+        
+        for attack_params, defense_params in batch:
+            print(f"\nRunning validation for {attack_params['attack_type']} attack with no defense and parameters {attack_params}")
+            attack_results = run_validation(cfg, args, attack_params=attack_params)
+            results.extend(attack_results)
+
+            if attack_results[0]['total_loss'] > args.early_stop_threshold:
+                print(f"Early stopping: Loss {attack_results[0]['total_loss']} exceeds threshold {args.early_stop_threshold}")
+                skipped_combinations.append(attack_results[0])
+                save_results(skipped_combinations, f'skipped_combinations_{timestamp}.csv', save_dir)
+                continue
+
+            print(f"\nRunning validation for defended images after {attack_params['attack_type']} attack and {defense_params} defense")
+            defense_results = run_validation(cfg, args, defended_images_dir=args.defended_images_dir)
+            results.extend(defense_results)
+            save_results(results, f'validation_results_{timestamp}.csv', save_dir)
+            print(f"Validation result: {defense_results}")
+            
+        print(f"\nthe value of i is {i}\n")
+        
+        if i == 20:
+            print(f"Processed third batch, breaking now.")
+            break
 
     if results:
-        # Convert results to DataFrame
-        df_results = pd.DataFrame(results)
-        df_results.to_csv('validation_results.csv', index=False)
+        save_results(results, f'validation_results_{timestamp}.csv', save_dir)
 
-        # Create visualizations
-        # Table visualization
+        df_results = pd.DataFrame(results)
+        df_results.to_csv(os.path.join(save_dir, f'validation_results_{timestamp}.csv'), index=False)
         print(df_results)
 
-        # Graph visualization
-        df_results.pivot(index='defense_type', columns='attack_type', values='total_loss').plot(kind='bar')
-        plt.title('Total Loss for Different Attacks and Defenses')
-        plt.xlabel('Defense')
-        plt.ylabel('Total Loss')
-        plt.xticks(rotation=45)
-        plt.legend(title='Attack')
-        plt.tight_layout()
-        plt.savefig('total_loss_by_attack_and_defense.png')
+        # Visualize results
+        metrics = ['da_seg_acc', 'da_seg_iou', 'da_seg_miou', 'll_seg_acc', 'll_seg_iou', 'll_seg_miou', 'p', 'r', 'map50', 'map']
+        for metric in metrics:
+            plot_performance(df_results, metric, f'{metric} Performance', metric, os.path.join(save_dir, f'{metric}_performance_{timestamp}.png'))
+
     else:
-        print("No validation results to process.")
+        print(f"No results to show.")
+        
+    if skipped_combinations:
+        save_results(skipped_combinations, f'skipped_combinations_{timestamp}.csv', save_dir)
+        df_skipped = pd.DataFrame(skipped_combinations)
+        df_skipped.to_csv(os.path.join(save_dir, f'skipped_combinations_{timestamp}.csv'), index=False)
+        print("Skipped combinations due to exceeding the threshold:")
+        print(df_skipped)
 
 if __name__ == "__main__":
     main()
