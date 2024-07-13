@@ -35,6 +35,7 @@ class BddDataset(AutoDriveDataset):
             mask_path = str(mask)
             label_path = mask_path.replace(str(self.mask_root), str(self.label_root)).replace(".png", ".json")
             
+            # print(f"{self.validation_type} The label path is {label_path}")
             # Conditional logic based on validation type
             if self.validation_type == 'normal':
                 image_path = mask_path.replace(str(self.mask_root), str(self.img_root)).replace(".png", ".jpg")

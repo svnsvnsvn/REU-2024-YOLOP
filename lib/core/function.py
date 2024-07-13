@@ -137,9 +137,8 @@ def train(cfg, train_loader, model, criterion, optimizer, scaler, epoch, num_bat
                 writer_dict['train_global_steps'] = global_steps + 1
 
 def validate(epoch, config, val_loader, val_dataset, model, criterion, output_dir, tb_log_dir, perturbed_images=None, experiment_number=0, writer_dict=None, logger=None, device='cpu', rank=-1, epsilon=None, attack_type=None, channel=None, step_decay = None, num_pixels = None):
-
     # Log the configuration
-    logger.info(config)
+    # logger.info(config)
     
     if attack_type is not None:
         # Constructing the save directory path with additional details based on the attack type
@@ -160,16 +159,7 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
             perturbed_save_dir = os.path.join(output_dir, f'{attack_type}_perturbed_image_eps_{epsilon}_num_pixels_{num_pixels}_channel_{channel}_{time.strftime("%Y%m%d-%H%M%S")}_ExpNum{experiment_number}')
         else:
             save_dir = output_dir
-        
-        '''
-        # Constructing the perturbed save directory path with additional details based on the attack type
-        if attack_type == 'fgsm':
-        elif attack_type == 'jsma':
-        elif attack_type == 'uap':
-        elif attack_type == 'ccp':
-        else:
-            perturbed_save_dir = os.path.join(final_output_dir, f'{attack_type}_perturbed_image_{time.strftime("%Y%m%d-%H%M%S")}_ExpNum{experiment_number}')
-        '''
+
     else:
         save_dir = os.path.join(output_dir, f'visualization_NoAttack')
         perturbed_save_dir = os.path.join(output_dir, f'perturbed_image_{time.strftime("%Y%m%d-%H%M%S")}_ExpNum{experiment_number}')
@@ -222,8 +212,6 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
     model.eval()
     jdict, stats, ap, ap_class, wandb_images = [], [], [], [], []
     
-    print(f"the length of VL is {len(val_loader)}")
-
     for batch_i, (img, target, paths, shapes) in tqdm(enumerate(val_loader), total=len(val_loader)):
         if not config.DEBUG:
             img = img.to(device, non_blocking=True)
@@ -293,11 +281,6 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
 
                 with open(metadata_path, 'w') as f:
                     json.dump(metadata, f, indent=4)
-                
-                # Log saved perturbed images
-                if logger is not None:
-                    logger.info(f"Saved perturbed image: {img_path}")
-                    logger.info(f"Saved metadata: {metadata_path}")
                    
         
         
@@ -350,13 +333,6 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
             total_loss, head_losses = criterion((train_out,da_seg_out, ll_seg_out), target, shapes,model)   
             losses.update(total_loss.item(), img.size(0))
             
-            # Load the original image for visualization
-            # original_img = cv2.imread(paths[batch_i])
-            
-            # Replace the visualization image with the original image
-            # img_test = original_img.copy()
-            # img_ll = original_img.copy()
-            # img_det = original_img.copy()
 
             #NMS
             t = time_synchronized()
@@ -373,7 +349,13 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
             if config.TEST.PLOTS:
                 if batch_i == 0:
                     for i in range(test_batch_size):
-                        img_test = cv2.imread(paths[i])
+                        img_filename = os.path.splitext(os.path.basename(paths[i]))[0] + '.jpg'
+                        img_path = os.path.join('lib/dataset/images/bdd100k/val', img_filename) #Path to the original image 
+
+                        # img_test = cv2.imread(paths[i])
+                        img_test = cv2.imread(img_path)
+                        
+                        # print(f"img test : {img_test.shape} \n")
                         da_seg_mask = da_seg_out[i][:, pad_h:height-pad_h, pad_w:width-pad_w].unsqueeze(0)
                         da_seg_mask = torch.nn.functional.interpolate(da_seg_mask, scale_factor=int(1/ratio), mode='bilinear')
                         _, da_seg_mask = torch.max(da_seg_mask, 1)
@@ -387,10 +369,12 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
                         # seg_mask = seg_mask > 0.5
                         # plot_img_and_mask(img_test, seg_mask, i,epoch,save_dir)
                         img_test1 = img_test.copy()
-                        _ = show_seg_result(img_test, da_seg_mask, i,epoch,save_dir)
+
+                        _ = show_seg_result(img_test, da_seg_mask, i, epoch,save_dir)
                         _ = show_seg_result(img_test1, da_gt_mask, i, epoch, save_dir, is_gt=True)
 
-                        img_ll = cv2.imread(paths[i])
+                        # img_ll = cv2.imread(paths[i])
+                        img_ll = cv2.imread(img_path)
                         ll_seg_mask = ll_seg_out[i][:, pad_h:height-pad_h, pad_w:width-pad_w].unsqueeze(0)
                         ll_seg_mask = torch.nn.functional.interpolate(ll_seg_mask, scale_factor=int(1/ratio), mode='bilinear')
                         _, ll_seg_mask = torch.max(ll_seg_mask, 1)
@@ -407,9 +391,10 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
                         _ = show_seg_result(img_ll, ll_seg_mask, i,epoch,save_dir, is_ll=True)
                         _ = show_seg_result(img_ll1, ll_gt_mask, i, epoch, save_dir, is_ll=True, is_gt=True)
 
-                        img_det = cv2.imread(paths[i]) #update this so the original img will be used not preprocc
+                        img_det = cv2.imread(img_path) 
                         img_gt = img_det.copy()
                         det = output[i].clone()
+                        
                         if len(det):
                             det[:,:4] = scale_coords(img[i].shape[1:],det[:,:4],img_det.shape).round()
                         for *xyxy,conf,cls in reversed(det):

@@ -120,12 +120,12 @@ def run_validation(cfg, args, attack_params=None, defense_params=None, baseline=
     elif defended_images_dir:
         validation_type = 'defense'
         cfg.defrost()
-        cfg.DATASET.TEST_SET = defended_images_dir
+        cfg.DATASET.TEST_SET = f'{attack_type}/{defense_type}'
         cfg.freeze()
     else:
         attack_type = attack_params['attack_type']
         defense_type = 'None'
-        validation_type = 'val'
+        validation_type = 'normal'
 
     logger, final_output_dir, tb_log_dir = create_logger(
         cfg, cfg.LOG_DIR, 'test', attack_type=attack_type, defense_type=defense_type)
