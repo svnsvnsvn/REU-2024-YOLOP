@@ -305,6 +305,88 @@ def plot_line(df, metric, param, title, y_label, filename):
     plt.savefig(filename)
     # plt.show()
 
+# def plot_performance(df, metric, title, y_label, filename):
+#     plt.figure(figsize=(14, 8))
+#     sns.set_palette("gray")  # Set the color palette to grayscale
+#     sns.barplot(data=df, x='defense_type', y=metric, hue='attack_type')
+#     plt.title(title, color='black')
+#     plt.xlabel('Defense Type', color='black')
+#     plt.ylabel(y_label, color='black')
+#     plt.xticks(rotation=45, color='black')
+#     plt.yticks(color='black')
+#     plt.legend(title='Attack Type', facecolor='white')
+#     plt.tight_layout()
+#     plt.savefig(filename, facecolor='white')
+#     plt.show()
+
+def plot_performance(df, metric, title, y_label, filename):
+    plt.figure(figsize=(14, 8))
+    sns.set_palette("gray")  # Set the color palette to grayscale
+    
+    # Separate the data into baseline, attacked, and defended
+    baseline_df = df[df['defense_type'] == 'None']
+    attacked_df = df[(df['defense_type'] == 'None') & (df['attack_type'] != 'Baseline')]
+    defended_df = df[df['defense_type'] != 'None']
+
+    # Plot the baseline
+    sns.barplot(data=baseline_df, x='defense_type', y=metric, hue='attack_type', dodge=False, color='muted', label='Baseline')
+
+    # Plot the attacked
+    sns.barplot(data=attacked_df, x='defense_type', y=metric, hue='attack_type', dodge=False, palette='lightgray')
+
+    # Plot the defended
+    sns.barplot(data=defended_df, x='defense_type', y=metric, hue='attack_type', dodge=True, palette='dark')
+    
+    plt.title(title, color='black')
+    plt.xlabel('Defense Type', color='black')
+    plt.ylabel(y_label, color='black')
+    plt.xticks(rotation=45, color='black')
+    plt.yticks(color='black')
+    handles, labels = plt.gca().get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys(), title='Type', facecolor='white')
+    plt.tight_layout()
+    plt.ylim(0, 1)  # Ensuring a consistent scale on the y-axis for better comparability
+    plt.savefig(filename, facecolor='white')
+    # plt.show()
+    
+def plot_attack_performance(df, attack_type, metric, title, y_label, filename):
+    plt.figure(figsize=(10, 6))
+    sns.set_palette("tab10")  # Use the default color palette
+
+    # Filter the dataframe for the specific attack type
+    df_attack = df[df['attack_type'] == attack_type]
+
+    # Separate baseline, attack only, and attack/defense
+    # Read the baseline and attacked metrics
+    baseline_df = df[df['attack_type'] == 'Baseline']
+    attack_df = df_attack[df_attack['defense_type'].isnull()]
+
+    print(attack_df)
+    print("\n")
+    
+    # Filter out the attack/defense data
+    defense_df = df_attack[df_attack['defense_type'].notnull()]
+    print(defend_df)
+    
+    # Plot baseline
+    sns.barplot(data=baseline_df, x='attack_type', y=metric, color='gray', label='Baseline')
+
+    # Plot attack only
+    sns.barplot(data=attack_df, x='attack_type', y=metric, color='red', label='Attack Only')
+
+    # Plot attack/defense
+    sns.barplot(data=defense_df, x='defense_type', y=metric, color='blue', label='Attack/Defense', alpha=0.6)
+
+    plt.title(title, color='black')
+    plt.xlabel('Type', color='black')
+    plt.ylabel(y_label, color='black')
+    plt.xticks(rotation=45, color='black')
+    plt.yticks(color='black')
+    plt.tight_layout()
+    plt.savefig(filename, facecolor='white')
+    # plt.show()
+        
 def main():
     args = parse_args()
     update_config(cfg, args)
@@ -402,8 +484,8 @@ def main():
             
         print(f"\nthe value of i is {i}\n")
         
-        if i == 20:
-            print(f"Processed third batch, breaking now.")
+        if i == 0:
+            print(f"Processed first batch, breaking now.")
             break
 
     if results:
@@ -415,8 +497,13 @@ def main():
 
         # Visualize results
         metrics = ['da_seg_acc', 'da_seg_iou', 'da_seg_miou', 'll_seg_acc', 'll_seg_iou', 'll_seg_miou', 'p', 'r', 'map50', 'map']
-        for metric in metrics:
-            plot_performance(df_results, metric, f'{metric} Performance', metric, os.path.join(save_dir, f'{metric}_performance_{timestamp}.png'))
+        attack_types = df_results['attack_type'].unique()
+
+        for attack_type in attack_types:
+            if attack_type == 'Baseline':
+                continue
+            for metric in metrics:
+                plot_attack_performance(df_results, attack_type, metric, f'{attack_type} - {metric} Performance', metric, os.path.join(save_dir, f'{attack_type}_{metric}_performance_{timestamp}.png'))
 
 
     else:
@@ -433,17 +520,5 @@ if __name__ == "__main__":
     main()
     
     
-def plot_performance(df, metric, title, y_label, filename):
-    plt.figure(figsize=(14, 8))
-    sns.set_palette("gray")  # Set the color palette to grayscale
-    sns.barplot(data=df, x='defense_type', y=metric, hue='attack_type')
-    plt.title(title, color='black')
-    plt.xlabel('Defense Type', color='black')
-    plt.ylabel(y_label, color='black')
-    plt.xticks(rotation=45, color='black')
-    plt.yticks(color='black')
-    plt.legend(title='Attack Type', facecolor='white')
-    plt.tight_layout()
-    plt.savefig(filename, facecolor='white')
-    plt.show()
+
     
