@@ -367,7 +367,7 @@ def plot_attack_performance(df, attack_type, metric, title, y_label, filename):
     
     # Filter out the attack/defense data
     defense_df = df_attack[df_attack['defense_type'].notnull()]
-    print(defend_df)
+    print(defense_df)
     
     # Plot baseline
     sns.barplot(data=baseline_df, x='attack_type', y=metric, color='gray', label='Baseline')
