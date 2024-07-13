@@ -23,11 +23,10 @@ import seaborn as sns
 from tqdm import tqdm
 from datetime import datetime
 
+from lib.core.Attacks.FGSM import fgsm_attack, fgsm_attack_with_noise, iterative_fgsm_attack
 from lib.core.Attacks.JSMA import calculate_saliency, find_and_perturb_highest_scoring_pixels
 from lib.core.Attacks.UAP import uap_sgd_yolop
-from lib.core.Attacks.FGSM import fgsm_attack
 from lib.core.Attacks.CCP import color_channel_perturbation
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run validation for different attacks and defenses")
@@ -51,7 +50,7 @@ def parse_args():
     parser.add_argument('--early_stop_threshold',
                         help='early stopping threshold for total loss',
                         type=float,
-                        default=0.65)  
+                        default= .65)  
     parser.add_argument('--batch_size',
                         help='number of combinations to process in each batch',
                         type=int,
@@ -109,7 +108,7 @@ def apply_attack(valid_loader, model, device, attack_params, criterion, cfg):
         return torch.cat(perturbed_images)
     return None
 
-def run_validation(cfg, args, attack_params=None, defense_params=None, baseline=False, defended_images_dir=None):
+def run_validation(cfg, args, attack_params, defense_params, baseline=False):
     if baseline:
         cfg.defrost()
         cfg.DATASET.TEST_SET = 'val'
@@ -117,15 +116,19 @@ def run_validation(cfg, args, attack_params=None, defense_params=None, baseline=
         validation_type = 'normal'
         attack_type = 'Baseline'
         defense_type = 'None'
-    elif defended_images_dir:
-        validation_type = 'defense'
-        cfg.defrost()
-        cfg.DATASET.TEST_SET = f'{attack_type}/{defense_type}'
-        cfg.freeze()
     else:
         attack_type = attack_params['attack_type']
-        defense_type = 'None'
-        validation_type = 'normal'
+        if defense_params is None:
+            cfg.defrost()
+            cfg.DATASET.TEST_SET = 'val'
+            cfg.freeze()
+            validation_type = 'attack'
+            defense_type = 'None'
+        else:
+            cfg.defrost()
+            cfg.DATASET.TEST_SET = f'{attack_type}/{defense_params}'
+            cfg.freeze()
+            validation_type = 'defense'
 
     logger, final_output_dir, tb_log_dir = create_logger(
         cfg, cfg.LOG_DIR, 'test', attack_type=attack_type, defense_type=defense_type)
@@ -159,12 +162,8 @@ def run_validation(cfg, args, attack_params=None, defense_params=None, baseline=
         cfg=cfg,
         is_train=False,
         inputsize=cfg.MODEL.IMAGE_SIZE,
-        transform=transforms.Compose([
-            transforms.ToTensor(),
-            normalize,
-        ]),
-        validation_type=validation_type
-        )
+        transform=transforms.Compose([transforms.ToTensor(), normalize])
+    )
 
     valid_loader = DataLoaderX(
         valid_dataset,
@@ -176,8 +175,7 @@ def run_validation(cfg, args, attack_params=None, defense_params=None, baseline=
     )
 
     epoch = 0
-    results = []
-    
+
     if validation_type == 'attack':
         # Apply attack
         perturbed_images = apply_attack(valid_loader, model, device, attack_params, criterion, cfg)
@@ -189,10 +187,10 @@ def run_validation(cfg, args, attack_params=None, defense_params=None, baseline=
     )
 
     msg = ('Test:    Loss({loss:.3f})\n'
-            'Driving area Segment: Acc({da_seg_acc:.3f})    IOU ({da_seg_iou:.3f})    mIOU({da_seg_miou:.3f})\n'
-            'Lane line Segment: Acc({ll_seg_acc:.3f})    IOU ({ll_seg_iou:.3f})  mIOU({ll_seg_miou:.3f})\n'
-            'Detect: P({p:.3f})  R({r:.3f})  mAP@0.5({map50:.3f})  mAP@0.5:0.95({map:.3f})\n'
-            'Time: inference({t_inf:.4f}s/frame)  nms({t_nms:.4f}s/frame)').format(
+           'Driving area Segment: Acc({da_seg_acc:.3f})    IOU ({da_seg_iou:.3f})    mIOU({da_seg_miou:.3f})\n'
+           'Lane line Segment: Acc({ll_seg_acc:.3f})    IOU ({ll_seg_iou:.3f})  mIOU({ll_seg_miou:.3f})\n'
+           'Detect: P({p:.3f})  R({r:.3f})  mAP@0.5({map50:.3f})  mAP@0.5:0.95({map:.3f})\n'
+           'Time: inference({t_inf:.4f}s/frame)  nms({t_nms:.4f}s/frame)').format(
         loss=total_loss, da_seg_acc=da_segment_results[0], da_seg_iou=da_segment_results[1], da_seg_miou=da_segment_results[2],
         ll_seg_acc=ll_segment_results[0], ll_seg_iou=ll_segment_results[1], ll_seg_miou=ll_segment_results[2],
         p=detect_results[0], r=detect_results[1], map50=detect_results[2], map=detect_results[3],
@@ -200,8 +198,9 @@ def run_validation(cfg, args, attack_params=None, defense_params=None, baseline=
 
     logger.info(msg)
     
-    results.append({
+    return {
         'attack_type': attack_type,
+        'attack_params': attack_params,
         'defense_type': defense_type,
         'total_loss': total_loss,
         'da_seg_acc': da_segment_results[0],
@@ -216,9 +215,7 @@ def run_validation(cfg, args, attack_params=None, defense_params=None, baseline=
         'map': detect_results[3],
         't_inf': times[0],
         't_nms': times[1]
-    })
-
-    return results
+    }
 
 def save_results(results, file_name, directory='.'):
     if not os.path.exists(directory):
@@ -248,19 +245,51 @@ def prioritize_combinations(task_list):
             prioritized_combinations.append((attack_params, defense_params))
     return prioritized_combinations
 
-def plot_performance(df, metric, title, y_label, filename):
+def plot_bar(df, metric, title, y_label, filename):
     plt.figure(figsize=(14, 8))
-    sns.set_palette("gray")  # Set the color palette to grayscale
     sns.barplot(data=df, x='defense_type', y=metric, hue='attack_type')
-    plt.title(title, color='black')
-    plt.xlabel('Defense Type', color='black')
-    plt.ylabel(y_label, color='black')
-    plt.xticks(rotation=45, color='black')
-    plt.yticks(color='black')
-    plt.legend(title='Attack Type', facecolor='white')
+    plt.title(title)
+    plt.xlabel('Defense Type')
+    plt.ylabel(y_label)
+    plt.xticks(rotation=45)
+    plt.legend(title='Attack Type')
     plt.tight_layout()
-    plt.savefig(filename, facecolor='white')
-    plt.show()
+    plt.savefig(filename)
+    # plt.show()
+
+def plot_heatmap(df, metric, title, filename):
+    pivot_table = df.pivot_table(index="defense_type", columns="attack_type", values=metric)
+    plt.figure(figsize=(12, 8))
+    sns.heatmap(pivot_table, annot=True, cmap="YlGnBu", fmt=".2f", linewidths=.5)
+    plt.title(title)
+    plt.xlabel('Attack Type')
+    plt.ylabel('Defense Type')
+    plt.tight_layout()
+    plt.savefig(filename)
+    # plt.show()
+
+def plot_box(df, metric, title, y_label, filename):
+    plt.figure(figsize=(14, 8))
+    sns.boxplot(data=df, x='defense_type', y=metric, hue='attack_type')
+    plt.title(title)
+    plt.xlabel('Defense Type')
+    plt.ylabel(y_label)
+    plt.xticks(rotation=45)
+    plt.legend(title='Attack Type')
+    plt.tight_layout()
+    plt.savefig(filename)
+    # plt.show()
+
+def plot_line(df, metric, param, title, y_label, filename):
+    plt.figure(figsize=(14, 8))
+    sns.lineplot(data=df, x=param, y=metric, hue='defense_type', style='attack_type', markers=True, dashes=False)
+    plt.title(title)
+    plt.xlabel(param)
+    plt.ylabel(y_label)
+    plt.legend(title='Defense Type')
+    plt.tight_layout()
+    plt.savefig(filename)
+    # plt.show()
 
 def main():
     args = parse_args()
@@ -305,31 +334,26 @@ def main():
 
     task_list = prioritize_combinations(task_list)
 
-    # Baseline validation
-    print("\nRunning baseline validation")
-    baseline_result = run_validation(cfg, args, baseline=True)
-    results.extend(baseline_result)
-
     # Use tqdm for progress bar
     for i in tqdm(range(0, len(task_list), args.batch_size), desc="Validating combinations"):
         batch = task_list[i:i + args.batch_size]
         
         for attack_params, defense_params in batch:
-            print(f"\nRunning validation for {attack_params['attack_type']} attack with no defense and parameters {attack_params}")
-            attack_results = run_validation(cfg, args, attack_params=attack_params)
-            results.extend(attack_results)
+            print(f"\nRunning validation for {attack_params['attack_type']} attack with {defense_params} defense and parameters {attack_params}")
+            result = run_validation(cfg, args, attack_params, defense_params)
 
-            if attack_results[0]['total_loss'] > args.early_stop_threshold:
-                print(f"Early stopping: Loss {attack_results[0]['total_loss']} exceeds threshold {args.early_stop_threshold}")
-                skipped_combinations.append(attack_results[0])
+            # Add epsilon to the result
+            result['epsilon'] = attack_params.get('epsilon', None)
+
+            if result['total_loss'] > args.early_stop_threshold:
+                print(f"Early stopping: Loss {result['total_loss']} exceeds threshold {args.early_stop_threshold}")
+                skipped_combinations.append(result)
                 save_results(skipped_combinations, f'skipped_combinations_{timestamp}.csv', save_dir)
                 continue
 
-            print(f"\nRunning validation for defended images after {attack_params['attack_type']} attack and {defense_params} defense")
-            defense_results = run_validation(cfg, args, defended_images_dir=args.defended_images_dir)
-            results.extend(defense_results)
+            results.append(result)
             save_results(results, f'validation_results_{timestamp}.csv', save_dir)
-            print(f"Validation result: {defense_results}")
+            print(f"Validation result: {result}")
             
         print(f"\nthe value of i is {i}\n")
         
@@ -345,10 +369,21 @@ def main():
         print(df_results)
 
         # Visualize results
-        metrics = ['da_seg_acc', 'da_seg_iou', 'da_seg_miou', 'll_seg_acc', 'll_seg_iou', 'll_seg_miou', 'p', 'r', 'map50', 'map']
-        for metric in metrics:
-            plot_performance(df_results, metric, f'{metric} Performance', metric, os.path.join(save_dir, f'{metric}_performance_{timestamp}.png'))
+        plot_bar(df_results, 'da_seg_acc', 'Driving Area Segmentation Accuracy', 'Accuracy', os.path.join(save_dir, f'da_seg_acc_bar_{timestamp}.png'))
+        plot_heatmap(df_results, 'da_seg_iou', 'Driving Area Segmentation IoU', os.path.join(save_dir, f'da_seg_iou_heatmap_{timestamp}.png'))
+        plot_box(df_results, 'll_seg_miou', 'Lane Line Segmentation mIoU', 'mIoU', os.path.join(save_dir, f'll_seg_miou_box_{timestamp}.png'))
+        plot_line(df_results, 'map', 'epsilon', 'Mean Average Precision over Epsilon', 'mAP', os.path.join(save_dir, f'map_line_{timestamp}.png'))
 
+        # Optionally, create a heatmap for more detailed analysis
+        pivot_table = df_results.pivot_table(index="defense_type", columns="attack_type", values="total_loss")
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(pivot_table, annot=True, cmap="YlGnBu")
+        plt.title('Heatmap of Total Loss for Different Attacks and Defenses')
+        plt.xlabel('Attack Type')
+        plt.ylabel('Defense Type')
+        plt.tight_layout()
+        plt.savefig(os.path.join(save_dir, f'heatmap_total_loss_{timestamp}.png'))
+        plt.show()
     else:
         print(f"No results to show.")
         
@@ -359,5 +394,10 @@ def main():
         print("Skipped combinations due to exceeding the threshold:")
         print(df_skipped)
 
+        # Visualize detailed metrics for skipped combinations
+        metrics = ['da_seg_acc', 'da_seg_iou', 'da_seg_miou', 'll_seg_acc', 'll_seg_iou', 'll_seg_miou', 'p', 'r', 'map50', 'map']
+        for metric in metrics:
+            plot_box(df_skipped, metric, f'{metric} for Skipped Combinations', metric, os.path.join(save_dir, f'skipped_{metric}_box_{timestamp}.png'))
+            
 if __name__ == "__main__":
     main()
