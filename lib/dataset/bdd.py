@@ -14,6 +14,8 @@ class BddDataset(AutoDriveDataset):
         self.validation_type = validation_type  # Accomodates nomral validations, attack validations, and attack/defense validations
         self.db = self._get_db()
         self.cfg = cfg
+        print(f"{self.validation_type}\n")
+
 
     def _get_db(self):
         """
@@ -35,12 +37,12 @@ class BddDataset(AutoDriveDataset):
             mask_path = str(mask)
             label_path = mask_path.replace(str(self.mask_root), str(self.label_root)).replace(".png", ".json")
             
-            # print(f"{self.validation_type} The label path is {label_path}")
             # Conditional logic based on validation type
             if self.validation_type == 'normal':
                 image_path = mask_path.replace(str(self.mask_root), str(self.img_root)).replace(".png", ".jpg")
             else:
-                base_name = os.path.basename(mask_path).split('_')[0]
+                base_name = os.path.splitext(os.path.basename(mask_path).split('_')[0])[0]
+                print(base_name)
                 image_path = os.path.join(str(self.img_root), f"{base_name}.jpg")
                 
             lane_path = mask_path.replace(str(self.mask_root), str(self.lane_root))

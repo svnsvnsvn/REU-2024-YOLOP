@@ -109,6 +109,7 @@ def apply_attack(valid_loader, model, device, attack_params, criterion, cfg):
     return None
 
 def run_validation(cfg, args, attack_params, defense_params, baseline=False):
+    
     if baseline:
         cfg.defrost()
         cfg.DATASET.TEST_SET = 'val'
@@ -129,9 +130,11 @@ def run_validation(cfg, args, attack_params, defense_params, baseline=False):
             cfg.DATASET.TEST_SET = f'{attack_type}/{defense_params}'
             cfg.freeze()
             validation_type = 'defense'
+            
+    print("updating the validation type to {validation_type}")
 
     logger, final_output_dir, tb_log_dir = create_logger(
-        cfg, cfg.LOG_DIR, 'test', attack_type=attack_type, defense_type=defense_type)
+        cfg, cfg.LOG_DIR, 'test', attack_type=attack_type, defense_type=defense_params if defense_params else 'None')
 
     writer_dict = {
         'writer': SummaryWriter(log_dir=tb_log_dir),
@@ -162,7 +165,8 @@ def run_validation(cfg, args, attack_params, defense_params, baseline=False):
         cfg=cfg,
         is_train=False,
         inputsize=cfg.MODEL.IMAGE_SIZE,
-        transform=transforms.Compose([transforms.ToTensor(), normalize])
+        transform=transforms.Compose([transforms.ToTensor(), normalize]),
+        validation_type = validation_type
     )
 
     valid_loader = DataLoaderX(
@@ -176,6 +180,7 @@ def run_validation(cfg, args, attack_params, defense_params, baseline=False):
 
     epoch = 0
 
+    perturbed_images = None
     if validation_type == 'attack':
         # Apply attack
         perturbed_images = apply_attack(valid_loader, model, device, attack_params, criterion, cfg)
@@ -216,6 +221,7 @@ def run_validation(cfg, args, attack_params, defense_params, baseline=False):
         't_inf': times[0],
         't_nms': times[1]
     }
+
 
 def save_results(results, file_name, directory='.'):
     if not os.path.exists(directory):
@@ -298,7 +304,7 @@ def main():
     results = []
     skipped_combinations = []
     seen_combinations = set()
-    
+
     save_dir = 'results'  # Specify your desired directory here
 
     # Create a unique identifier for the current run
@@ -334,26 +340,31 @@ def main():
 
     task_list = prioritize_combinations(task_list)
 
+    # Baseline validation
+    print("\nRunning baseline validation")
+    baseline_result = run_validation(cfg, args, attack_params={}, defense_params={}, baseline=True)
+    results.append(baseline_result)
+
     # Use tqdm for progress bar
     for i in tqdm(range(0, len(task_list), args.batch_size), desc="Validating combinations"):
         batch = task_list[i:i + args.batch_size]
         
         for attack_params, defense_params in batch:
-            print(f"\nRunning validation for {attack_params['attack_type']} attack with {defense_params} defense and parameters {attack_params}")
-            result = run_validation(cfg, args, attack_params, defense_params)
+            print(f"\nRunning validation for {attack_params['attack_type']} attack with no defense and parameters {attack_params}")
+            attack_result = run_validation(cfg, args, attack_params, defense_params=None)
+            results.append(attack_result)
 
-            # Add epsilon to the result
-            result['epsilon'] = attack_params.get('epsilon', None)
-
-            if result['total_loss'] > args.early_stop_threshold:
-                print(f"Early stopping: Loss {result['total_loss']} exceeds threshold {args.early_stop_threshold}")
-                skipped_combinations.append(result)
+            if attack_result['total_loss'] > args.early_stop_threshold:
+                print(f"Early stopping: Loss {attack_result['total_loss']} exceeds threshold {args.early_stop_threshold}")
+                skipped_combinations.append(attack_result)
                 save_results(skipped_combinations, f'skipped_combinations_{timestamp}.csv', save_dir)
                 continue
 
-            results.append(result)
+            print(f"\nRunning validation for {attack_params['attack_type']} attack with {defense_params} defense and parameters {attack_params}")
+            defense_result = run_validation(cfg, args, attack_params, defense_params)
+            results.append(defense_result)
             save_results(results, f'validation_results_{timestamp}.csv', save_dir)
-            print(f"Validation result: {result}")
+            print(f"Validation result: {defense_result}")
             
         print(f"\nthe value of i is {i}\n")
         
@@ -369,21 +380,10 @@ def main():
         print(df_results)
 
         # Visualize results
-        plot_bar(df_results, 'da_seg_acc', 'Driving Area Segmentation Accuracy', 'Accuracy', os.path.join(save_dir, f'da_seg_acc_bar_{timestamp}.png'))
-        plot_heatmap(df_results, 'da_seg_iou', 'Driving Area Segmentation IoU', os.path.join(save_dir, f'da_seg_iou_heatmap_{timestamp}.png'))
-        plot_box(df_results, 'll_seg_miou', 'Lane Line Segmentation mIoU', 'mIoU', os.path.join(save_dir, f'll_seg_miou_box_{timestamp}.png'))
-        plot_line(df_results, 'map', 'epsilon', 'Mean Average Precision over Epsilon', 'mAP', os.path.join(save_dir, f'map_line_{timestamp}.png'))
+        metrics = ['da_seg_acc', 'da_seg_iou', 'da_seg_miou', 'll_seg_acc', 'll_seg_iou', 'll_seg_miou', 'p', 'r', 'map50', 'map']
+        for metric in metrics:
+            plot_performance(df_results, metric, f'{metric} Performance', metric, os.path.join(save_dir, f'{metric}_performance_{timestamp}.png'))
 
-        # Optionally, create a heatmap for more detailed analysis
-        pivot_table = df_results.pivot_table(index="defense_type", columns="attack_type", values="total_loss")
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(pivot_table, annot=True, cmap="YlGnBu")
-        plt.title('Heatmap of Total Loss for Different Attacks and Defenses')
-        plt.xlabel('Attack Type')
-        plt.ylabel('Defense Type')
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_dir, f'heatmap_total_loss_{timestamp}.png'))
-        plt.show()
     else:
         print(f"No results to show.")
         
@@ -394,10 +394,20 @@ def main():
         print("Skipped combinations due to exceeding the threshold:")
         print(df_skipped)
 
-        # Visualize detailed metrics for skipped combinations
-        metrics = ['da_seg_acc', 'da_seg_iou', 'da_seg_miou', 'll_seg_acc', 'll_seg_iou', 'll_seg_miou', 'p', 'r', 'map50', 'map']
-        for metric in metrics:
-            plot_box(df_skipped, metric, f'{metric} for Skipped Combinations', metric, os.path.join(save_dir, f'skipped_{metric}_box_{timestamp}.png'))
-            
 if __name__ == "__main__":
     main()
+    
+    
+def plot_performance(df, metric, title, y_label, filename):
+    plt.figure(figsize=(14, 8))
+    sns.set_palette("gray")  # Set the color palette to grayscale
+    sns.barplot(data=df, x='defense_type', y=metric, hue='attack_type')
+    plt.title(title, color='black')
+    plt.xlabel('Defense Type', color='black')
+    plt.ylabel(y_label, color='black')
+    plt.xticks(rotation=45, color='black')
+    plt.yticks(color='black')
+    plt.legend(title='Attack Type', facecolor='white')
+    plt.tight_layout()
+    plt.savefig(filename, facecolor='white')
+    plt.show()

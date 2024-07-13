@@ -507,7 +507,7 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
             #Thread(target=plot_images, args=(img, output_to_target(output), paths, f, names), daemon=True).start()
 
 
-        if batch_i == 7:
+        if batch_i == 0:
             break        
     # Compute statistics
     # stats : [[all_img_correct]...[all_img_tcls]]
