@@ -140,6 +140,8 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
     # Log the configuration
     # logger.info(config)
     
+    results = []
+
     if attack_type is not None:
         # Constructing the save directory path with additional details based on the attack type
         if attack_type == 'FGSM':
@@ -266,21 +268,21 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
 
             img = perturbed_data
                 
-            # Save perturbed images
-            for j in range(img.size(0)):
-                img_np = img[j].cpu().detach().numpy().transpose(1, 2, 0) * 255
-                img_np = img_np.astype(np.uint8)
+            # # Save perturbed images
+            # for j in range(img.size(0)):
+            #     img_np = img[j].cpu().detach().numpy().transpose(1, 2, 0) * 255
+            #     img_np = img_np.astype(np.uint8)
                                 
-                img_filename = os.path.splitext(os.path.basename(paths[j]))[0]
+            #     img_filename = os.path.splitext(os.path.basename(paths[j]))[0]
                 
-                img_path = os.path.join(perturbed_save_dir, f'{img_filename}.jpg')
-                metadata_path = os.path.join(perturbed_save_dir, f'{img_filename}_metadata.json')
+            #     img_path = os.path.join(perturbed_save_dir, f'{img_filename}.jpg')
+            #     metadata_path = os.path.join(perturbed_save_dir, f'{img_filename}_metadata.json')
 
-                cv2.imwrite(img_path, img_np)
+            #     cv2.imwrite(img_path, img_np)
                 
 
-                with open(metadata_path, 'w') as f:
-                    json.dump(metadata, f, indent=4)
+            #     with open(metadata_path, 'w') as f:
+            #         json.dump(metadata, f, indent=4)
                    
         
         
@@ -590,6 +592,38 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
     #print segmet_result
     t = [T_inf.avg, T_nms.avg]
     
+    metric_result = {
+        'attack_type': attack_type if attack_type else 'Baseline',
+        'epsilon': epsilon,
+        'num_pixels': num_pixels,
+        'channel': channel,
+        'step_decay': step_decay,
+        'total_loss': losses.avg,
+        'da_seg_acc': da_acc_seg.avg,
+        'da_seg_iou': da_IoU_seg.avg,
+        'da_seg_miou': da_mIoU_seg.avg,
+        'll_seg_acc': ll_acc_seg.avg,
+        'll_seg_iou': ll_IoU_seg.avg,
+        'll_seg_miou': ll_mIoU_seg.avg,
+        'p': mp,
+        'r': mr,
+        'map50': map50,
+        'map': map,
+        't_inf': T_inf.avg,
+        't_nms': T_nms.avg
+    }
+    
+    results.append(metric_result)
+
+    # Save results to CSV
+    save_results_to_csv(results, f'validation_results_{time.strftime("%Y%m%d-%H%M%S")}.csv', save_dir)
     
     return da_segment_result, ll_segment_result, detect_result, losses.avg, maps, t
 
+def save_results_to_csv(results, file_name, directory='.'):
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    file_path = os.path.join(directory, file_name)
+    df = pd.DataFrame(results)
+    df.to_csv(file_path, index=False)
+    print(f"Saved results to {file_path}")

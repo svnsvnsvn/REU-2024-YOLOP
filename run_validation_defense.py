@@ -57,6 +57,7 @@ def parse_args():
                         default=10)
     return parser.parse_args()
 
+
 def apply_attack(valid_loader, model, device, attack_params, criterion, cfg):
     if attack_params['attack_type'] == 'FGSM':
         epsilon = attack_params['epsilon']
@@ -222,7 +223,6 @@ def run_validation(cfg, args, attack_params, defense_params, baseline=False):
         't_nms': times[1]
     }
 
-
 def save_results(results, file_name, directory='.'):
     if not os.path.exists(directory):
         os.makedirs(directory)
@@ -315,54 +315,62 @@ def main():
         return
 
     task_list = []
+    file_list = []
+    
+    # Collect all metadata files
     for root, dirs, files in os.walk(args.defended_images_dir):
         for file in files:
             if file.endswith('_metadata.json'):
-                metadata_path = os.path.realpath(os.path.join(root, file))
-                with open(metadata_path, 'r') as f:
-                    metadata = json.load(f)
+                file_list.append(os.path.realpath(os.path.join(root, file)))
 
-                attack_params = {
-                    'attack_type': metadata['attack_type'],
-                    'epsilon': metadata.get('epsilon', None),
-                    'num_pixels': metadata.get('num_pixels', None),
-                    'channel': metadata.get('channel', None)
-                }
-                defense_params = metadata['defense_params']
+    # Process metadata files with tqdm progress bar
+    for metadata_path in tqdm(file_list, desc="Processing metadata files"):
+        with open(metadata_path, 'r') as f:
+            metadata = json.load(f)
 
-                combination_id = (attack_params['attack_type'], defense_params, attack_params.get('epsilon'), attack_params.get('num_pixels'), attack_params.get('channel'))
+        attack_params = {
+            'attack_type': metadata['attack_type'],
+            'epsilon': metadata.get('epsilon', None),
+            'num_pixels': metadata.get('num_pixels', None),
+            'channel': metadata.get('channel', None)
+        }
+        defense_params = metadata['defense_params']
 
-                if combination_id in seen_combinations:
-                    continue
+        combination_id = (attack_params['attack_type'], defense_params, attack_params.get('epsilon'), attack_params.get('num_pixels'), attack_params.get('channel'))
 
-                seen_combinations.add(combination_id)
-                task_list.append((attack_params, defense_params))
+        if combination_id in seen_combinations:
+            continue
 
+        seen_combinations.add(combination_id)
+        task_list.append((attack_params, defense_params))
+        
     task_list = prioritize_combinations(task_list)
 
     # Baseline validation
     print("\nRunning baseline validation")
     baseline_result = run_validation(cfg, args, attack_params={}, defense_params={}, baseline=True)
     results.append(baseline_result)
-
+    
+    # Read attacked-only metrics from multiple CSV files
+    csv_paths = ['attacked_metrics_fgsm.csv', 'attacked_metrics_jsma.csv', 'attacked_metrics_uap.csv', 'attacked_metrics_ccp.csv']
+    attacked_metrics = read_attacked_metrics(csv_paths)
+    results.extend(attacked_metrics.to_dict(orient='records'))
+    
     # Use tqdm for progress bar
     for i in tqdm(range(0, len(task_list), args.batch_size), desc="Validating combinations"):
         batch = task_list[i:i + args.batch_size]
         
         for attack_params, defense_params in batch:
-            print(f"\nRunning validation for {attack_params['attack_type']} attack with no defense and parameters {attack_params}")
-            attack_result = run_validation(cfg, args, attack_params, defense_params=None)
-            results.append(attack_result)
-
-            if attack_result['total_loss'] > args.early_stop_threshold:
-                print(f"Early stopping: Loss {attack_result['total_loss']} exceeds threshold {args.early_stop_threshold}")
-                skipped_combinations.append(attack_result)
-                save_results(skipped_combinations, f'skipped_combinations_{timestamp}.csv', save_dir)
-                continue
-
             print(f"\nRunning validation for {attack_params['attack_type']} attack with {defense_params} defense and parameters {attack_params}")
             defense_result = run_validation(cfg, args, attack_params, defense_params)
             results.append(defense_result)
+            
+            if defense_result['total_loss'] > args.early_stop_threshold:
+                print(f"Early stopping: Loss {defense_result['total_loss']} exceeds threshold {args.early_stop_threshold}")
+                skipped_combinations.append(defense_result)
+                save_results(skipped_combinations, f'skipped_combinations_{timestamp}.csv', save_dir)
+                continue
+
             save_results(results, f'validation_results_{timestamp}.csv', save_dir)
             print(f"Validation result: {defense_result}")
             
@@ -383,6 +391,7 @@ def main():
         metrics = ['da_seg_acc', 'da_seg_iou', 'da_seg_miou', 'll_seg_acc', 'll_seg_iou', 'll_seg_miou', 'p', 'r', 'map50', 'map']
         for metric in metrics:
             plot_performance(df_results, metric, f'{metric} Performance', metric, os.path.join(save_dir, f'{metric}_performance_{timestamp}.png'))
+
 
     else:
         print(f"No results to show.")
@@ -411,3 +420,10 @@ def plot_performance(df, metric, title, y_label, filename):
     plt.tight_layout()
     plt.savefig(filename, facecolor='white')
     plt.show()
+    
+def read_attacked_metrics(csv_paths):
+    combined_df = pd.DataFrame()
+    for csv_path in csv_paths:
+        df = pd.read_csv(csv_path)
+        combined_df = pd.concat([combined_df, df], ignore_index=True)
+    return combined_df

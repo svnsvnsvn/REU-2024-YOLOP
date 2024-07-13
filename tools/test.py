@@ -34,6 +34,7 @@ from lib.core.Attacks.UAP import uap_sgd_yolop
 import datetime
 import matplotlib.pyplot as plt
 
+
 def plot_metrics(results_df, metric_list, x_param, attack_type, baseline_metrics, exp_output_dir):
     
     # Ensure the directory exists
@@ -392,7 +393,8 @@ def main():
 
     # Now run validations for each attack type
     if attack_type == "FGSM":
-        epsilons = [.1, .3, .5, .75, 1, 3, 5, 7, 10] if args.experiment_mode == 1 else [args.epsilon]
+        epsilons = [0.01, 0.05, 0.1, .5 ] if args.experiment_mode == 1 else [args.epsilon] 
+        '''.1, .3, .5, .75, 1, 3, 5, 7, 10'''
         for experiment_number, epsilon in enumerate(epsilons, start=1):
             exp_logger, exp_output_dir = create_experiment_logger(base_output_dir, experiment_number, attack_type, epsilon=epsilon)
             da_segment_results, ll_segment_results, detect_results, total_loss, maps, times = validate(
@@ -429,12 +431,10 @@ def main():
 
     elif attack_type == "JSMA":
         perturbation_params = [
-            (10, 0.5, 'add'), (10, 2.5, 'set'), (10, 5.0, 'noise'),
-            (30, 0.5, 'add'), (30, 2.5, 'set'), (30, 5.0, 'noise'),
-            (50, 0.5, 'add'), (50, 2.5, 'set'), (50, 5.0, 'noise'),
-            (100, 0.5, 'add'), (100, 2.5, 'set'), (100, 5.0, 'noise'),
-            (200, 0.5, 'add'), (200, 2.5, 'set'), (200, 5.0, 'noise'),
-            (500, 0.5, 'add'), (500, 2.5, 'set'), (500, 5.0, 'noise')
+            (10, 0.01, 'add'), (10, 0.5, 'set'), (10, 1, 'noise'),
+            (50, 0.01, 'add'), (50, 0.5, 'set'), (50, 1, 'noise'),
+            (100, 0.01, 'add'), (100, 0.5, 'set'), (100, 1, 'noise'),
+            
         ] if args.experiment_mode else [(args.num_pixels, args.jsma_perturbation, args.jsma_attack_type)]
         
         for experiment_number, (num_pixels, perturb_value, perturb_type) in enumerate(perturbation_params, start=1):

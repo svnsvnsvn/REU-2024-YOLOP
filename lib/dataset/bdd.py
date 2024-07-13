@@ -42,7 +42,7 @@ class BddDataset(AutoDriveDataset):
                 image_path = mask_path.replace(str(self.mask_root), str(self.img_root)).replace(".png", ".jpg")
             else:
                 base_name = os.path.splitext(os.path.basename(mask_path).split('_')[0])[0]
-                print(base_name)
+                # print(base_name)
                 image_path = os.path.join(str(self.img_root), f"{base_name}.jpg")
                 
             lane_path = mask_path.replace(str(self.mask_root), str(self.lane_root))
