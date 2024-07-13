@@ -487,26 +487,26 @@ def main():
 
     elif attack_type == "UAP":
         uap_params = [
-            (10, 0.1, 0.7, None, None, 10),
-            (10, 0.6, 0.75, None, None, 11),
-            (10, 1.1, 0.8, None, None, 12),
-            (10, 1.6, 0.85, None, None, 13),
-            (10, 2.1, 0.9, None, None, 14),
-            (10, 2.6, 0.95, None, None, 15),
-            (10, 3.1, 1.0, None, None, 16),
-            (10, 3.6, 1.05, None, None, 17),
-            (10, 4.1, 1.1, None, None, 18),
-            (10, 4.6, 1.15, None, None, 19),
-            (10, 5.1, 0.7, None, None, 20),
-            (10, 5.6, 0.75, None, None, 21),
-            (10, 6.1, 0.8, None, None, 22),
-            (10, 6.6, 0.85, None, None, 23),
-            (10, 7.1, 0.9, None, None, 24),
-            (10, 7.6, 0.95, None, None, 25),
-            (10, 8.1, 1.0, None, None, 26),
-            (10, 8.6, 1.05, None, None, 27),
-            (10, 9.1, 1.1, None, None, 28),
-            (10, 9.6, 1.15, None, None, 29) 
+            (5, 0.1, 0.01, None, None, 7),
+            (5, 0.5, 0.05, None, None, 7),
+            (5, 1.0, 0.1, None, None, 7),
+            # (10, 1.6, 0.85, None, None, 13),
+            # (10, 2.1, 0.9, None, None, 14),
+            # (10, 2.6, 0.95, None, None, 15),
+            # (10, 3.1, 1.0, None, None, 16),
+            # (10, 3.6, 1.05, None, None, 17),
+            # (10, 4.1, 1.1, None, None, 18),
+            # (10, 4.6, 1.15, None, None, 19),
+            # (10, 5.1, 0.7, None, None, 20),
+            # (10, 5.6, 0.75, None, None, 21),
+            # (10, 6.1, 0.8, None, None, 22),
+            # (10, 6.6, 0.85, None, None, 23),
+            # (10, 7.1, 0.9, None, None, 24),
+            # (10, 7.6, 0.95, None, None, 25),
+            # (10, 8.1, 1.0, None, None, 26),
+            # (10, 8.6, 1.05, None, None, 27),
+            # (10, 9.1, 1.1, None, None, 28),
+            # (10, 9.6, 1.15, None, None, 29) 
         ] if args.experiment_mode else [(args.uap_max_iterations, args.uap_eps, args.uap_delta, args.uap_num_classes, args.uap_targeted, args.uap_batch_size)]
         
         for experiment_number, (nb_epoch, eps, step_decay, y_target, layer_name, beta) in enumerate(uap_params, start=1):
@@ -564,35 +564,11 @@ def main():
     elif attack_type == "CCP":
         ccp_params = [
             (0.01, 'R'),
-            (0.03, 'R'),
             (0.05, 'R'),
-            (0.10, 'R'),
-            (0.50, 'R'),
-            (1.0, 'R'),
-            (2.5, 'R'),
-            (5.0, 'R'),
-            (10.0, 'R'),
-            (15.0, 'R'),
             (0.01, 'G'),
-            (0.03, 'G'),
             (0.05, 'G'),
-            (0.1, 'G'),
-            (0.5, 'G'),
-            (1.0, 'G'),
-            (2.5, 'G'),
-            (5.0, 'G'),
-            (10.0, 'G'),
-            (15.0, 'G'),
             (0.01, 'B'),
-            (0.03, 'B'),
-            (0.05, 'B'), 
-            (0.1, 'B'), 
-            (0.5, 'B'), 
-            (1.0, 'B'), 
-            (2.5, 'B'), 
-            (5.0, 'B'), 
-            (10.0, 'B'), 
-            (15.0, 'B')
+            (0.05, 'B')
         ] if args.experiment_mode else [(args.epsilon, args.color_channel)]
         
         for experiment_number, (epsilon, color_channel) in enumerate(ccp_params, start=1):

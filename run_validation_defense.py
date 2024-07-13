@@ -57,6 +57,12 @@ def parse_args():
                         default=10)
     return parser.parse_args()
 
+def read_attacked_metrics(csv_paths):
+    combined_df = pd.DataFrame()
+    for csv_path in csv_paths:
+        df = pd.read_csv(csv_path)
+        combined_df = pd.concat([combined_df, df], ignore_index=True)
+    return combined_df
 
 def apply_attack(valid_loader, model, device, attack_params, criterion, cfg):
     if attack_params['attack_type'] == 'FGSM':
@@ -352,9 +358,27 @@ def main():
     results.append(baseline_result)
     
     # Read attacked-only metrics from multiple CSV files
-    csv_paths = ['attacked_metrics_fgsm.csv', 'attacked_metrics_jsma.csv', 'attacked_metrics_uap.csv', 'attacked_metrics_ccp.csv']
+    csv_paths = ['csvs/CCP_epsilon_0.01_channel_B_validation_results_20240713-005540.csv',
+        'csvs/CCP_epsilon_0.01_channel_G_validation_results_20240713-005313.csv',
+        'csvs/CCP_epsilon_0.01_channel_R_validation_results_20240713-005042.csv',
+        'csvs/CCP_epsilon_0.05_channel_B_validation_results_20240713-005650.csv',
+        'csvs/CCP_epsilon_0.05_channel_G_validation_results_20240713-005430.csv',
+        'csvs/CCP_epsilon_0.05_channel_R_validation_results_20240713-005156.csv',
+        'csvs/FGSM_epsilon_0.01_validation_results_20240712-234907.csv',
+        'csvs/FGSM_epsilon_0.1_validation_results_20240712-235201.csv',
+        'csvs/FGSM_epsilon_0.05_validation_results_20240712-235030.csv',
+        'csvs/FGSM_epslon_0.5_validation_results_20240712-235333.csv',
+        'csvs/JSMA_epsilon_0.01_validation_results_20240713-000232.csv',
+        'csvs/JSMA_epsilon_0.5_validation_results_20240713-000437.csv',
+        'csvs/JSMA_epsilon_1_validation_results_20240713-000653.csv',
+        'csvs/UAP_step_decay_0.01_validation_results_20240713-004025.csv',
+        'csvs/UAP_step_decay_0.05_validation_results_20240713-004405.csv',
+        'csvs/UAP_step_decay_1_validation_results_20240713-004732.csv']
     attacked_metrics = read_attacked_metrics(csv_paths)
-    results.extend(attacked_metrics.to_dict(orient='records'))
+    
+    if not attacked_metrics.empty:
+        results.extend(attacked_metrics.to_dict(orient='records'))
+        print("Metrics appended.")
     
     # Use tqdm for progress bar
     for i in tqdm(range(0, len(task_list), args.batch_size), desc="Validating combinations"):
@@ -421,9 +445,3 @@ def plot_performance(df, metric, title, y_label, filename):
     plt.savefig(filename, facecolor='white')
     plt.show()
     
-def read_attacked_metrics(csv_paths):
-    combined_df = pd.DataFrame()
-    for csv_path in csv_paths:
-        df = pd.read_csv(csv_path)
-        combined_df = pd.concat([combined_df, df], ignore_index=True)
-    return combined_df
