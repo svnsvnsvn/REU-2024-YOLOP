@@ -126,6 +126,8 @@ def run_validation(cfg, args, attack_params, defense_params, baseline=False):
         defense_type = 'None'
     else:
         attack_type = attack_params['attack_type']
+        defense_type = defense_params
+
         if defense_params is None:
             cfg.defrost()
             cfg.DATASET.TEST_SET = 'val'
@@ -385,7 +387,7 @@ def main():
         batch = task_list[i:i + args.batch_size]
         
         for attack_params, defense_params in batch:
-            print(f"\nRunning validation for {attack_params['attack_type']} attack with {defense_params} defense and parameters {attack_params}")
+            print(f"\n{i} Running validation for {attack_params['attack_type']} attack with {defense_params} defense and parameters {attack_params}\n")
             defense_result = run_validation(cfg, args, attack_params, defense_params)
             results.append(defense_result)
             
