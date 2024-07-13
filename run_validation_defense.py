@@ -27,6 +27,7 @@ from lib.core.Attacks.FGSM import fgsm_attack, fgsm_attack_with_noise, iterative
 from lib.core.Attacks.JSMA import calculate_saliency, find_and_perturb_highest_scoring_pixels
 from lib.core.Attacks.UAP import uap_sgd_yolop
 from lib.core.Attacks.CCP import color_channel_perturbation
+import random
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run validation for different attacks and defenses")
@@ -305,88 +306,14 @@ def plot_line(df, metric, param, title, y_label, filename):
     plt.tight_layout()
     plt.savefig(filename)
     # plt.show()
-
-# def plot_performance(df, metric, title, y_label, filename):
-#     plt.figure(figsize=(14, 8))
-#     sns.set_palette("gray")  # Set the color palette to grayscale
-#     sns.barplot(data=df, x='defense_type', y=metric, hue='attack_type')
-#     plt.title(title, color='black')
-#     plt.xlabel('Defense Type', color='black')
-#     plt.ylabel(y_label, color='black')
-#     plt.xticks(rotation=45, color='black')
-#     plt.yticks(color='black')
-#     plt.legend(title='Attack Type', facecolor='white')
-#     plt.tight_layout()
-#     plt.savefig(filename, facecolor='white')
-#     plt.show()
-
-# def plot_performance(df, metric, title, y_label, filename):
-#     plt.figure(figsize=(14, 8))
-#     sns.set_palette("gray")  # Set the color palette to grayscale
-    
-#     # Separate the data into baseline, attacked, and defended
-#     baseline_df = df[df['defense_type'] == 'None']
-#     attacked_df = df[(df['defense_type'] == 'None') & (df['attack_type'] != 'Baseline')]
-#     defended_df = df[df['defense_type'] != 'None']
-
-#     # Plot the baseline
-#     sns.barplot(data=baseline_df, x='defense_type', y=metric, hue='attack_type', dodge=False, color='muted', label='Baseline')
-
-#     # Plot the attacked
-#     sns.barplot(data=attacked_df, x='defense_type', y=metric, hue='attack_type', dodge=False, palette='lightgray')
-
-#     # Plot the defended
-#     sns.barplot(data=defended_df, x='defense_type', y=metric, hue='attack_type', dodge=True, palette='dark')
-    
-#     plt.title(title, color='black')
-#     plt.xlabel('Defense Type', color='black')
-#     plt.ylabel(y_label, color='black')
-#     plt.xticks(rotation=45, color='black')
-#     plt.yticks(color='black')
-#     handles, labels = plt.gca().get_legend_handles_labels()
-#     by_label = dict(zip(labels, handles))
-#     plt.legend(by_label.values(), by_label.keys(), title='Type', facecolor='white')
-#     plt.tight_layout()
-#     plt.ylim(0, 1)  # Ensuring a consistent scale on the y-axis for better comparability
-#     plt.savefig(filename, facecolor='white')
-#     # plt.show()
-
-# def plot_performance(df, metric, title, y_label, filename):
-#     plt.figure(figsize=(14, 8))
-#     sns.set_palette("gray")  # Set the color palette to grayscale
-    
-#     # Separate the data into baseline, attacked, and defended
-#     baseline_df = df[df['defense_type'] == 'None']
-#     attacked_df = df[(df['defense_type'] == 'None') & (df['attack_type'] != 'Baseline')]
-#     defended_df = df[df['defense_type'] != 'None']
-
-#     # Plot the baseline
-#     sns.barplot(data=baseline_df, x='defense_type', y=metric, hue='attack_type', dodge=False, color='blue', label='Baseline')
-
-#     # Plot the attacked
-#     sns.barplot(data=attacked_df, x='defense_type', y=metric, hue='attack_type', dodge=False, palette='lightgray')
-
-#     # Plot the defended
-#     sns.barplot(data=defended_df, x='defense_type', y=metric, hue='attack_type', dodge=True, palette='dark')
-    
-#     plt.title(title, color='black')
-#     plt.xlabel('Defense Type', color='black')
-#     plt.ylabel(y_label, color='black')
-#     plt.xticks(rotation=45, color='black')
-#     plt.yticks(color='black')
-#     handles, labels = plt.gca().get_legend_handles_labels()
-#     by_label = dict(zip(labels, handles))
-#     plt.legend(by_label.values(), by_label.keys(), title='Type', facecolor='white')
-#     plt.tight_layout()
-#     plt.ylim(0, 1)  # Ensuring a consistent scale on the y-axis for better comparability
-#     plt.savefig(filename, facecolor='white')
-# #     # plt.show()
     
     
 def plot_performance(df, metric, title, y_label, filename):
     plt.figure(figsize=(14, 8))
-    sns.set_palette("gray")  # Set the color palette to grayscale
-    
+    # sns.set_palette("gray")  # Set the color palette to grayscale
+    purple_palette = sns.color_palette("Purples")
+
+    sns.set_palette(purple_palette)
     # Separate the data into baseline, attacked, and defended
     baseline_df = df[df['attack_type'] == 'Baseline']
     attacked_df = df[(df['defense_type'] == 'none') & (df['attack_type'] != 'Baseline')]
@@ -512,6 +439,22 @@ def main():
     task_list = []
     file_list = []
     
+    # Total number of tasks desired
+    total_tasks = 200  # Set this to the desired total number of tasks
+
+    # Calculate the quota for each attack type
+    quota_per_attack = total_tasks // 4
+
+    # Set quotas for each attack type
+    attack_quotas = {
+        'fgsm': quota_per_attack,
+        'ccp': quota_per_attack,
+        'uap': quota_per_attack,
+        'jsma': quota_per_attack
+    }
+    
+    attack_counts = {key: 0 for key in attack_quotas}
+
     # Collect all metadata files
     for root, dirs, files in os.walk(args.defended_images_dir):
         for file in files:
@@ -519,35 +462,62 @@ def main():
                 file_list.append(os.path.realpath(os.path.join(root, file)))
 
     # Process metadata files with tqdm progress bar
-    for metadata_path in tqdm(file_list, desc="Processing metadata files"):
-        with open(metadata_path, 'r') as f:
-            metadata = json.load(f)
+    while not all(count >= quota_per_attack for count in attack_counts.values()):
+        for metadata_path in tqdm(file_list, desc="Processing metadata files"):
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
 
-        attack_params = {
-            'attack_type': metadata['attack_type'],
-            'epsilon': metadata.get('epsilon', None),
-            'num_pixels': metadata.get('num_pixels', None),
-            'channel': metadata.get('channel', None)
-        }
-        defense_params = metadata['defense_params']
+            attack_type = metadata.get('attack_type', 'unknown')
+            if attack_type == 'unknown':
+                print(f"Warning: 'attack_type' not found in {metadata_path}")
+                continue
 
-        combination_id = (attack_params['attack_type'], defense_params, attack_params.get('epsilon'), attack_params.get('num_pixels'), attack_params.get('channel'))
+            # Check if the quota for this attack type is already met
+            if attack_counts[attack_type] >= attack_quotas[attack_type]:
+                continue
 
-        if combination_id in seen_combinations:
-            continue
+            attack_params = {
+                'attack_type': attack_type,
+                'epsilon': metadata.get('epsilon', None),
+                'num_pixels': metadata.get('num_pixels', None),
+                'channel': metadata.get('channel', None)
+            }
+            defense_params = metadata.get('defense_params', 'none')
+            
+            combination_id = (attack_params['attack_type'], defense_params, attack_params.get('epsilon'), attack_params.get('num_pixels'), attack_params.get('channel'))
 
-        seen_combinations.add(combination_id)
-        task_list.append((attack_params, defense_params))
-        
-    task_list = prioritize_combinations(task_list)
+            if combination_id in seen_combinations:
+                continue
 
+            seen_combinations.add(combination_id)
+            task_list.append((attack_params, defense_params))
+
+            # Increment the count for this attack type
+            attack_counts[attack_type] += 1
+            print(f"Added task: {attack_params}, {defense_params}")
+
+            # Break the loop early if all quotas are met
+            if all(count >= quota_per_attack for count in attack_counts.values()):
+                break
+
+        # Check for unmet quotas and print messages
+        for attack, quota in attack_quotas.items():
+            if attack_counts[attack] < quota:
+                print(f"Continuing to process files for attack type: {attack} (found {attack_counts[attack]} / {quota})")
+
+    # Debug: Print out the collected task list to verify
+    print("Final Task List:")
+    for task in task_list:
+        print(task)
+    
     # Baseline validation
     print("\nRunning baseline validation")
     baseline_result = run_validation(cfg, args, attack_params={}, defense_params={}, baseline=True)
     results.append(baseline_result)
     
     # Read attacked-only metrics from multiple CSV files
-    csv_paths = ['csvs/CCP_epsilon_0.01_channel_B_validation_results_20240713-005540.csv',
+    csv_paths = [
+        'csvs/CCP_epsilon_0.01_channel_B_validation_results_20240713-005540.csv',
         'csvs/CCP_epsilon_0.01_channel_G_validation_results_20240713-005313.csv',
         'csvs/CCP_epsilon_0.01_channel_R_validation_results_20240713-005042.csv',
         'csvs/CCP_epsilon_0.05_channel_B_validation_results_20240713-005650.csv',
@@ -589,8 +559,8 @@ def main():
             
         print(f"\nthe value of i is {i}\n")
         
-        if i == 0:
-            print(f"Processed first batch, breaking now.")
+        if i == 4:
+            print(f"Processed fifth batch, breaking now.")
             break
 
     if results:
