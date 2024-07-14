@@ -440,17 +440,17 @@ def main():
     file_list = []
     
     # Total number of tasks desired
-    total_tasks = 200  # Set this to the desired total number of tasks
+    total_tasks = 100  # Set this to the desired total number of tasks
 
     # Calculate the quota for each attack type
     quota_per_attack = total_tasks // 4
 
     # Set quotas for each attack type
     attack_quotas = {
-        'fgsm': quota_per_attack,
-        'ccp': quota_per_attack,
-        'uap': quota_per_attack,
-        'jsma': quota_per_attack
+        'FGSM': quota_per_attack,
+        'CCP': quota_per_attack,
+        'UAP': quota_per_attack,
+        'JSMA': quota_per_attack
     }
     
     attack_counts = {key: 0 for key in attack_quotas}
@@ -462,48 +462,53 @@ def main():
                 file_list.append(os.path.realpath(os.path.join(root, file)))
 
     # Process metadata files with tqdm progress bar
-    while not all(count >= quota_per_attack for count in attack_counts.values()):
-        for metadata_path in tqdm(file_list, desc="Processing metadata files"):
-            with open(metadata_path, 'r') as f:
-                metadata = json.load(f)
+    with tqdm(total=len(file_list), desc="Processing metadata files", unit="file") as pbar:
+        while not all(count >= quota_per_attack for count in attack_counts.values()):
+            for metadata_path in tqdm(file_list, desc="Processing metadata files"):
+                with open(metadata_path, 'r') as f:
+                    metadata = json.load(f)
 
-            attack_type = metadata.get('attack_type', 'unknown')
-            if attack_type == 'unknown':
-                print(f"Warning: 'attack_type' not found in {metadata_path}")
-                continue
+                attack_type = metadata.get('attack_type', 'unknown')
+                if attack_type == 'unknown':
+                    print(f"Warning: 'attack_type' not found in {metadata_path}")
+                    pbar.update(1)
+                    continue
 
-            # Check if the quota for this attack type is already met
-            if attack_counts[attack_type] >= attack_quotas[attack_type]:
-                continue
+                # Check if the quota for this attack type is already met
+                if attack_counts[attack_type] >= attack_quotas[attack_type]:
+                    pbar.update(1)
+                    continue
 
-            attack_params = {
-                'attack_type': attack_type,
-                'epsilon': metadata.get('epsilon', None),
-                'num_pixels': metadata.get('num_pixels', None),
-                'channel': metadata.get('channel', None)
-            }
-            defense_params = metadata.get('defense_params', 'none')
-            
-            combination_id = (attack_params['attack_type'], defense_params, attack_params.get('epsilon'), attack_params.get('num_pixels'), attack_params.get('channel'))
+                attack_params = {
+                    'attack_type': attack_type,
+                    'epsilon': metadata.get('epsilon', None),
+                    'num_pixels': metadata.get('num_pixels', None),
+                    'channel': metadata.get('channel', None)
+                }
+                defense_params = metadata.get('defense_params', 'none')
+                
+                combination_id = (attack_params['attack_type'], defense_params, attack_params.get('epsilon'), attack_params.get('num_pixels'), attack_params.get('channel'))
 
-            if combination_id in seen_combinations:
-                continue
+                if combination_id in seen_combinations:
+                    pbar.update(1)
+                    continue
 
-            seen_combinations.add(combination_id)
-            task_list.append((attack_params, defense_params))
+                seen_combinations.add(combination_id)
+                task_list.append((attack_params, defense_params))
 
-            # Increment the count for this attack type
-            attack_counts[attack_type] += 1
-            print(f"Added task: {attack_params}, {defense_params}")
+                # Increment the count for this attack type
+                attack_counts[attack_type] += 1
+                print(f"Added task: {attack_params}, {defense_params}")
 
-            # Break the loop early if all quotas are met
-            if all(count >= quota_per_attack for count in attack_counts.values()):
-                break
+                # Break the loop early if all quotas are met
+                if all(count >= quota_per_attack for count in attack_counts.values()):
+                    break
+                pbar.update(1)
 
-        # Check for unmet quotas and print messages
-        for attack, quota in attack_quotas.items():
-            if attack_counts[attack] < quota:
-                print(f"Continuing to process files for attack type: {attack} (found {attack_counts[attack]} / {quota})")
+            # Check for unmet quotas and print messages
+            for attack, quota in attack_quotas.items():
+                if attack_counts[attack] < quota:
+                    print(f"Continuing to process files for attack type: {attack} (found {attack_counts[attack]} / {quota})")
 
     # Debug: Print out the collected task list to verify
     print("Final Task List:")
@@ -539,29 +544,31 @@ def main():
         results.extend(attacked_metrics.to_dict(orient='records'))
         print("Metrics appended.")
     
-    # Use tqdm for progress bar
-    for i in tqdm(range(0, len(task_list), args.batch_size), desc="Validating combinations"):
-        batch = task_list[i:i + args.batch_size]
-        
-        for attack_params, defense_params in batch:
-            print(f"\n{i} Running validation for {attack_params['attack_type']} attack with {defense_params} defense and parameters {attack_params}\n")
-            defense_result = run_validation(cfg, args, attack_params, defense_params)
-            results.append(defense_result)
+    # Use tqdm for progress 
+    with tqdm(total=len(task_list), desc="Validating combinations", unit="batch") as pbar:
+        for i in tqdm(range(0, len(task_list), args.batch_size), desc="Validating combinations"):
+            batch = task_list[i:i + args.batch_size]
             
-            if defense_result['total_loss'] > args.early_stop_threshold:
-                print(f"Early stopping: Loss {defense_result['total_loss']} exceeds threshold {args.early_stop_threshold}")
-                skipped_combinations.append(defense_result)
-                save_results(skipped_combinations, f'skipped_combinations_{timestamp}.csv', save_dir)
-                continue
+            for attack_params, defense_params in batch:
+                print(f"\n{i} Running validation for {attack_params['attack_type']} attack with {defense_params} defense and parameters {attack_params}\n")
+                defense_result = run_validation(cfg, args, attack_params, defense_params)
+                results.append(defense_result)
+                
+                if defense_result['total_loss'] > args.early_stop_threshold:
+                    print(f"Early stopping: Loss {defense_result['total_loss']} exceeds threshold {args.early_stop_threshold}")
+                    skipped_combinations.append(defense_result)
+                    save_results(skipped_combinations, f'skipped_combinations_{timestamp}.csv', save_dir)
+                    continue
 
-            save_results(results, f'validation_results_{timestamp}.csv', save_dir)
-            print(f"Validation result: {defense_result}")
+                save_results(results, f'validation_results_{timestamp}.csv', save_dir)
+                print(f"Validation result: {defense_result}")
             
-        print(f"\nthe value of i is {i}\n")
-        
-        if i == 4:
-            print(f"Processed fifth batch, breaking now.")
-            break
+            pbar.update(1)
+            print(f"\nthe value of i is {i}\n")
+            
+            if i == 4:
+                print(f"Processed fifth batch, breaking now.")
+                break
 
     if results:
         save_results(results, f'validation_results_{timestamp}.csv', save_dir)

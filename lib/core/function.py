@@ -268,23 +268,20 @@ def validate(epoch, config, val_loader, val_dataset, model, criterion, output_di
 
             img = perturbed_data
                 
-            # # Save perturbed images
-            # for j in range(img.size(0)):
-            #     img_np = img[j].cpu().detach().numpy().transpose(1, 2, 0) * 255
-            #     img_np = img_np.astype(np.uint8)
+            # Save perturbed images
+            for j in range(img.size(0)):
+                img_np = img[j].cpu().detach().numpy().transpose(1, 2, 0) * 255
+                img_np = img_np.astype(np.uint8)
                                 
-            #     img_filename = os.path.splitext(os.path.basename(paths[j]))[0]
+                img_filename = os.path.splitext(os.path.basename(paths[j]))[0]
                 
-            #     img_path = os.path.join(perturbed_save_dir, f'{img_filename}.jpg')
-            #     metadata_path = os.path.join(perturbed_save_dir, f'{img_filename}_metadata.json')
+                img_path = os.path.join(perturbed_save_dir, f'{img_filename}.jpg')
+                metadata_path = os.path.join(perturbed_save_dir, f'{img_filename}_metadata.json')
 
-            #     cv2.imwrite(img_path, img_np)
-                
+                cv2.imwrite(img_path, img_np)
 
-            #     with open(metadata_path, 'w') as f:
-            #         json.dump(metadata, f, indent=4)
-                   
-        
+                with open(metadata_path, 'w') as f:
+                    json.dump(metadata, f, indent=4)
         
         with torch.no_grad():
             pad_w, pad_h = shapes[0][1][1]

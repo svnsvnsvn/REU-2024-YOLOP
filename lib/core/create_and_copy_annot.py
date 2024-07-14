@@ -1,16 +1,23 @@
 import os
 import json
 import itertools
+from tqdm import tqdm
 
 def create_and_link_annotations(defended_image_dir, annotation_dirs):
     counter = itertools.count(1)
     
+    # Get all directories to process
+    all_dirs = []
     for root, dirs, files in os.walk(defended_image_dir):
         for dir_name in dirs:
-            defended_dir = os.path.join(root, dir_name)
+            all_dirs.append(os.path.join(root, dir_name))
 
-            for file_name in os.listdir(defended_dir):
-                if file_name.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff')):
+    with tqdm(total=len(all_dirs), desc="Processing directories", unit="dir") as pbar_dirs:
+        for defended_dir in all_dirs:
+            files = [f for f in os.listdir(defended_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff'))]
+            
+            with tqdm(total=len(files), desc=f"Processing files in {os.path.basename(defended_dir)}", unit="file") as pbar_files:
+                for file_name in files:
                     # Generate a unique identifier for the image
                     unique_id = f"{os.path.splitext(file_name)[0]}_{next(counter)}"
 
@@ -52,20 +59,22 @@ def create_and_link_annotations(defended_image_dir, annotation_dirs):
                             dest_file = os.path.join(new_annotation_dir, f"{base_name}_{unique_id}{os.path.splitext(annotation_file_name)[1]}")
                             
                             if os.path.exists(src_file):
-                                print(f"Source file: {src_file}")
-                                print(f"Destination file: {dest_file}")
+                                # print(f"Source file: {src_file}")
+                                # print(f"Destination file: {dest_file}")
                                 
                                 os.symlink(src_file, dest_file)
-                                print(f"Created symlink {dest_file} -> {src_file}")
+                                # print(f"Created symlink {dest_file} -> {src_file}")
                             else:
                                 print(f"Annotation file {src_file} does not exist.")
-
+                    pbar_files.update(1)
+            pbar_dirs.update(1)
+            
 def main():
     defended_image_dir = "DefendedImages"
     annotation_dirs = [
-        "/Users/annubaka/Library/Mobile Documents/com~apple~CloudDocs/Projects/YOLOP-main/lib/dataset/da_seg_annotations",
-        "/Users/annubaka/Library/Mobile Documents/com~apple~CloudDocs/Projects/YOLOP-main/lib/dataset/det_annotations",
-        "/Users/annubaka/Library/Mobile Documents/com~apple~CloudDocs/Projects/YOLOP-main/lib/dataset/ll_seg_annotations"
+        "/Volumes/hobbywobbies/REU-2024-YOLOP/lib/dataset/da_seg_annotations",
+        "/Volumes/hobbywobbies/REU-2024-YOLOP/lib/dataset/det_annotations",
+        "/Volumes/hobbywobbies/REU-2024-YOLOP/lib/dataset/ll_seg_annotations"
     ]
 
     create_and_link_annotations(defended_image_dir, annotation_dirs)
