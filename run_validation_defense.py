@@ -345,94 +345,15 @@ def plot_performance(df, metric, title, y_label, filename):
     # plt.show()
 
 
-# def plot_performance_by_attack(df, metric, title_template, y_label, filename_template):
-#     attack_types = df['attack_type'].unique()
-
-#     for attack_type in attack_types:
-#         if attack_type == 'Baseline':
-#             continue
-        
-#         plt.figure(figsize=(14, 8))
-#         sns.set_palette("gray")  # Set the color palette to grayscale
-
-#         # Filter for baseline and specific attack type
-#         filtered_df = df[(df['attack_type'] == attack_type) | (df['attack_type'] == 'baseline')].copy()
-#         filtered_df.loc[:, 'combination'] = filtered_df.apply(
-#             lambda row: 'Baseline' if row['attack_type'] == 'baseline' else f"{str(row['attack_type']).upper()}" if row['defense_type'] == 'none' else f"{str(row['attack_type']).upper()} + {str(row['defense_type']).upper()}",
-#             axis=1
-#         )
-
-#         # Define the order for plotting
-#         order = ['Baseline'] + [f"{attack_type.upper()}"] + \
-#                 sorted(filtered_df.loc[(filtered_df['attack_type'] == attack_type) & (filtered_df['defense_type'] != 'none'), 'combination'].unique(), key=str.lower)
-
-#         # Plot the data
-#         sns.barplot(data=filtered_df, x='combination', y=metric, errorbar=None, order=order)
-#         plt.title(title_template.format(attack_type.upper()), color='black')
-#         plt.xlabel('Combination', color='black')
-#         plt.ylabel(y_label, color='black')
-#         plt.xticks(rotation=45, color='black')
-#         plt.yticks(color='black')
-#         plt.tight_layout()
-#         plt.ylim(0, 1)  # Ensuring a consistent scale on the y-axis for better comparability
-#         filename = filename_template.format(attack_type)
-#         plt.savefig(filename, facecolor='white')
-#         plt.show()
-
-# def plot_performance_by_attack(df, metric, title_template, y_label, filename_template):
-#     attack_types = df['attack_type'].unique()
-    
-#     # Define a custom palette with various shades of purple
-#     custom_palette = sns.color_palette("dark:#5A2D81", n_colors=len(attack_types) + 1)
-    
-#     for attack_type in attack_types:
-#         if attack_type == 'Baseline':
-#             continue
-        
-#         plt.figure(figsize=(14, 8))
-#         sns.set_palette(custom_palette)  # Set the color palette 
-
-#         # Filter for baseline and specific attack type
-#         filtered_df = df[(df['attack_type'] == attack_type) | (df['attack_type'] == 'Baseline')].copy()
-
-#         # Ensure all values are treated as strings and handle missing values
-#         filtered_df['defense_type'] = filtered_df['defense_type'].fillna('none').astype(str)  # Changed line
-#         filtered_df['attack_type'] = filtered_df['attack_type'].astype(str)  # Changed line
-        
-#         filtered_df['combination'] = filtered_df.apply(  # Changed line
-#             lambda row: 'Baseline' if row['attack_type'] == 'Baseline' else f"{row['attack_type'].upper()}" if row['defense_type'] == 'none' else f"{row['attack_type'].upper()} + {row['defense_type'].upper()}",
-#             axis=1
-#         )
-
-#         # Define the order for plotting
-#         order = ['Baseline'] + [f"{attack_type.upper()}"] + \
-#                 sorted(filtered_df.loc[(filtered_df['attack_type'] == attack_type) & (filtered_df['defense_type'] != 'none'), 'combination'].unique(), key=str.lower)
-
-#         # Plot the data
-#         sns.barplot(data=filtered_df, x='combination', y=metric, errorbar=None, order=order)
-#         plt.title(title_template.format(attack_type.upper()), color='black')
-#         plt.xlabel('Combination', color='black')
-#         plt.ylabel(y_label, color='black')
-#         plt.xticks(rotation=45, color='black')
-#         plt.yticks(color='black')
-#         plt.tight_layout()
-#         plt.ylim(0, 1)  # Ensuring a consistent scale on the y-axis for better comparability
-#         filename = filename_template.format(attack_type)
-#         plt.savefig(filename, facecolor='white')
-#         # plt.show()
-
 def plot_performance_by_attack(df, metric, title_template, y_label, filename_template):
     attack_types = df['attack_type'].unique()
-
-    # Define a custom palette with the specified purple color
-    custom_palette = sns.color_palette("Set2", n_colors=len(df['combination'].unique()))
 
     for attack_type in attack_types:
         if attack_type == 'Baseline':
             continue
         
         plt.figure(figsize=(14, 8))
-        sns.set_palette(custom_palette)  # Set the custom purple palette
+        # sns.set_palette(purple_palette)
 
         # Filter for baseline and specific attack type
         filtered_df = df[(df['attack_type'] == attack_type) | (df['attack_type'] == 'Baseline')].copy()
@@ -449,9 +370,14 @@ def plot_performance_by_attack(df, metric, title_template, y_label, filename_tem
         # Define the order for plotting
         order = ['Baseline'] + [f"{attack_type.upper()}"] + \
                 sorted(filtered_df.loc[(filtered_df['attack_type'] == attack_type) & (filtered_df['defense_type'] != 'none'), 'combination'].unique(), key=str.lower)
-
+                
+        # Generate a distinct color palette for different combinations
+        unique_combinations = filtered_df['combination'].unique()
+        color_palette = sns.color_palette("tab20", len(unique_combinations))
+        color_mapping = {combination: color_palette[idx % len(color_palette)] for idx, combination in enumerate(unique_combinations)}
+        
         # Plot the data
-        ax = sns.barplot(data=filtered_df, x='combination', y=metric, errorbar=None, order=order)
+        ax = sns.barplot(data=filtered_df, x='combination', y=metric, errorbar=None, order=order, palette = color_mapping)
         
         # Add metric labels above the bars
         for p in ax.patches:
@@ -470,8 +396,9 @@ def plot_performance_by_attack(df, metric, title_template, y_label, filename_tem
         plt.ylim(0, 1)  # Ensuring a consistent scale on the y-axis for better comparability
         filename = filename_template.format(attack_type)
         plt.savefig(filename, facecolor='white')
+        plt.show()
         plt.close()  # Close the figure after saving to avoid display issues in loops
-        
+
 def main():
     args = parse_args()
     update_config(cfg, args)
@@ -619,7 +546,7 @@ def main():
             pbar.update(1)
             print(f"\nthe value of i is {i}\n")
             
-            if i == 30:
+            if i == 40:
                 print(f"Processed fourth batch, breaking now.")
                 break
 
