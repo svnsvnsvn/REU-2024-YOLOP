@@ -62,7 +62,7 @@ def read_attacked_metrics(csv_paths):
     combined_df = pd.DataFrame()
     for csv_path in csv_paths:
         df = pd.read_csv(csv_path)
-        df['attack_type'] = df['attack_type'].str.lower()
+        df['attack_type'] = df['attack_type'].str.upper()
         combined_df = pd.concat([combined_df, df], ignore_index=True)
     return combined_df
 
@@ -381,13 +381,16 @@ def plot_performance(df, metric, title, y_label, filename):
 
 def plot_performance_by_attack(df, metric, title_template, y_label, filename_template):
     attack_types = df['attack_type'].unique()
-
+    
+    # Define a custom palette with various shades of purple
+    custom_palette = sns.color_palette("Purples", n_colors=len(attack_types) + 1)
+    
     for attack_type in attack_types:
         if attack_type == 'Baseline':
             continue
         
         plt.figure(figsize=(14, 8))
-        sns.set_palette("gray")  # Set the color palette to grayscale
+        sns.set_palette(custom_palette)  # Set the color palette 
 
         # Filter for baseline and specific attack type
         filtered_df = df[(df['attack_type'] == attack_type) | (df['attack_type'] == 'Baseline')].copy()
@@ -566,8 +569,8 @@ def main():
             pbar.update(1)
             print(f"\nthe value of i is {i}\n")
             
-            if i == 4:
-                print(f"Processed fifth batch, breaking now.")
+            if i == 0:
+                print(f"Processed first batch, breaking now.")
                 break
 
     if results:
