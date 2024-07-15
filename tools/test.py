@@ -36,7 +36,17 @@ import matplotlib.pyplot as plt
 
 
 def plot_metrics(results_df, metric_list, x_param, attack_type, baseline_metrics, exp_output_dir):
-    
+    """
+    Plot metrics for the experiment results and save the plots.
+
+    Args:
+        results_df (pd.DataFrame): DataFrame containing the experiment results.
+        metric_list (list): List of metrics to plot.
+        x_param (str): Parameter to plot on the x-axis.
+        attack_type (str): Type of attack.
+        baseline_metrics (dict): Baseline metrics.
+        exp_output_dir (str): Directory to save the plots.
+    """
     # Ensure the directory exists
     os.makedirs(exp_output_dir, exist_ok=True)
     
@@ -52,13 +62,29 @@ def plot_metrics(results_df, metric_list, x_param, attack_type, baseline_metrics
         plt.savefig(f'{exp_output_dir}/{attack_type}_{metric}_plot.png')
         plt.close()
 
-      
 def calculate_percentage_drop(initial, current):
+    """
+    Calculate the percentage drop from the initial value to the current value.
+
+    Args:
+        initial (float): Initial value.
+        current (float): Current value.
+
+    Returns:
+        float: Percentage drop.
+    """
     if initial == 0:
         return 0.0
     return ((initial - current) / initial) * 100
 
 def parse_args():
+    """
+    Parse command line arguments.
+
+    Returns:
+        argparse.Namespace: Parsed command line arguments.
+    """
+
     parser = argparse.ArgumentParser(description='Test Multitask network')
 
     # philly
@@ -177,6 +203,19 @@ def parse_args():
     return args
 
 def create_and_save_table(results_df, normal_metrics, metrics, identifier_column, output_filename_prefix, identifier_values, display_identifier, combine=False):
+    """
+    Create and save a table of results, including percentage drops.
+
+    Args:
+        results_df (pd.DataFrame): DataFrame containing the experiment results.
+        normal_metrics (dict): Baseline metrics.
+        metrics (list): List of metrics to include in the table.
+        identifier_column (str): Column to identify different runs.
+        output_filename_prefix (str): Prefix for the output filenames.
+        identifier_values (list): List of identifier values.
+        display_identifier (str): Display identifier for the normal metrics.
+        combine (bool): Whether to combine all results into a single table.
+    """   
     percentage_drops_df = results_df.copy()
 
     for metric in metrics:
@@ -288,7 +327,97 @@ def create_and_save_table(results_df, normal_metrics, metrics, identifier_column
             plt.savefig(f'{output_filename_prefix}_{identifier_value}.png', bbox_inches='tight', dpi=600)
             plt.close(fig)
             
+def create_log_message(da_segment_results, ll_segment_results, detect_results, total_loss, times):
+    """
+    Create a log message for the validation results.
+
+    Args:
+        da_segment_results (tuple): Results for driving area segmentation.
+        ll_segment_results (tuple): Results for lane line segmentation.
+        detect_results (tuple): Results for object detection.
+        total_loss (float): Total loss value.
+        times (tuple): Timing information.
+
+    Returns:
+        str: Formatted log message.
+    """
+    return 'Test:    Loss({loss:.3f})\n' \
+           'Driving area Segment: Acc({da_seg_acc:.3f})    IOU ({da_seg_iou:.3f})    mIOU({da_seg_miou:.3f})\n' \
+           'Lane line Segment: Acc({ll_seg_acc:.3f})    IOU ({ll_seg_iou:.3f})  mIOU({ll_seg_miou:.3f})\n' \
+           'Detect: P({p:.3f})  R({r:.3f})  mAP@0.5({map50:.3f})  mAP@0.5:0.95({map:.3f})\n' \
+           'Time: inference({t_inf:.4f}s/frame)  nms({t_nms:.4f}s/frame)'.format(
+               loss=total_loss, da_seg_acc=da_segment_results[0], da_seg_iou=da_segment_results[1], da_seg_miou=da_segment_results[2],
+               ll_seg_acc=ll_segment_results[0], ll_seg_iou=ll_segment_results[1], ll_seg_miou=ll_segment_results[2],
+               p=detect_results[0], r=detect_results[1], map50=detect_results[2], map=detect_results[3],
+               t_inf=times[0], t_nms=times[1]
+           )
+
+def process_results(exp_output_dir, logger, da_segment_results, ll_segment_results, detect_results, total_loss, normal_metrics, param_name, param_value):
+    """
+    Process and save the validation results.
+
+    Args:
+        exp_output_dir (str): Directory to save the results.
+        logger (logging.Logger): Logger to log the results.
+        da_segment_results (tuple): Results for driving area segmentation.
+        ll_segment_results (tuple): Results for lane line segmentation.
+        detect_results (tuple): Results for object detection.
+        total_loss (float): Total loss value.
+        normal_metrics (dict): Baseline metrics.
+        param_name (str): Name of the parameter being varied.
+        param_value (float): Value of the parameter being varied.
+    """
+    results_df = pd.DataFrame({
+        'da_acc_seg': [da_segment_results[0]],
+        'da_IoU_seg': [da_segment_results[1]],
+        'da_mIoU_seg': [da_segment_results[2]],
+        'll_acc_seg': [ll_segment_results[0]],
+        'll_IoU_seg': [ll_segment_results[1]],
+        'll_mIoU_seg': [ll_segment_results[2]],
+        'detect_result': [detect_results[2]],  # mAP@0.5
+        'loss_avg': [total_loss],
+        param_name: [param_value]
+    })
+    metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
+    create_and_save_table(results_df, normal_metrics, metrics, param_name, f'{exp_output_dir}/{param_name}_results', results_df[param_name].unique(), '0', combine=True)
+    plot_metrics(results_df, metrics, param_name, param_name, normal_metrics, exp_output_dir)
+
+def create_normal_metrics(da_segment_results, ll_segment_results, detect_results, total_loss):
+    """
+    Create a dictionary of baseline metrics.
+
+    Args:
+        da_segment_results (tuple): Results for driving area segmentation.
+        ll_segment_results (tuple): Results for lane line segmentation.
+        detect_results (tuple): Results for object detection.
+        total_loss (float): Total loss value.
+
+    Returns:
+        dict: Dictionary of baseline metrics.
+    """
+    return {
+        'da_acc_seg': da_segment_results[0],
+        'da_IoU_seg': da_segment_results[1],
+        'da_mIoU_seg': da_segment_results[2],
+        'll_acc_seg': ll_segment_results[0],
+        'll_IoU_seg': ll_segment_results[1],
+        'll_mIoU_seg': ll_segment_results[2],
+        'detect_result': detect_results[2],  # mAP@0.5
+        'loss_avg': total_loss,
+        'da_acc_seg_drop': 0.0,
+        'da_IoU_seg_drop': 0.0,
+        'da_mIoU_seg_drop': 0.0,
+        'll_acc_seg_drop': 0.0,
+        'll_IoU_seg_drop': 0.0,
+        'll_mIoU_seg_drop': 0.0,
+        'detect_result_drop': 0.0,  # mAP@0.5
+        'loss_avg_drop': 0.0
+    }
+    
 def main():
+    """
+    Main function to run the experiment and process the results.
+    """
     # set all the configurations
     args = parse_args()
     update_config(cfg, args)
@@ -626,54 +755,6 @@ def main():
     print("Test Finish")
     print("Starting time: ", startTime)
     print("Ending time: ", endTime.strftime("%Y-%m-%d %H:%M:%S"))
-
-def create_log_message(da_segment_results, ll_segment_results, detect_results, total_loss, times):
-    return 'Test:    Loss({loss:.3f})\n' \
-           'Driving area Segment: Acc({da_seg_acc:.3f})    IOU ({da_seg_iou:.3f})    mIOU({da_seg_miou:.3f})\n' \
-           'Lane line Segment: Acc({ll_seg_acc:.3f})    IOU ({ll_seg_iou:.3f})  mIOU({ll_seg_miou:.3f})\n' \
-           'Detect: P({p:.3f})  R({r:.3f})  mAP@0.5({map50:.3f})  mAP@0.5:0.95({map:.3f})\n' \
-           'Time: inference({t_inf:.4f}s/frame)  nms({t_nms:.4f}s/frame)'.format(
-               loss=total_loss, da_seg_acc=da_segment_results[0], da_seg_iou=da_segment_results[1], da_seg_miou=da_segment_results[2],
-               ll_seg_acc=ll_segment_results[0], ll_seg_iou=ll_segment_results[1], ll_seg_miou=ll_segment_results[2],
-               p=detect_results[0], r=detect_results[1], map50=detect_results[2], map=detect_results[3],
-               t_inf=times[0], t_nms=times[1]
-           )
-
-def process_results(exp_output_dir, logger, da_segment_results, ll_segment_results, detect_results, total_loss, normal_metrics, param_name, param_value):
-    results_df = pd.DataFrame({
-        'da_acc_seg': [da_segment_results[0]],
-        'da_IoU_seg': [da_segment_results[1]],
-        'da_mIoU_seg': [da_segment_results[2]],
-        'll_acc_seg': [ll_segment_results[0]],
-        'll_IoU_seg': [ll_segment_results[1]],
-        'll_mIoU_seg': [ll_segment_results[2]],
-        'detect_result': [detect_results[2]],  # mAP@0.5
-        'loss_avg': [total_loss],
-        param_name: [param_value]
-    })
-    metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
-    create_and_save_table(results_df, normal_metrics, metrics, param_name, f'{exp_output_dir}/{param_name}_results', results_df[param_name].unique(), '0', combine=True)
-    plot_metrics(results_df, metrics, param_name, param_name, normal_metrics, exp_output_dir)
-
-def create_normal_metrics(da_segment_results, ll_segment_results, detect_results, total_loss):
-    return {
-        'da_acc_seg': da_segment_results[0],
-        'da_IoU_seg': da_segment_results[1],
-        'da_mIoU_seg': da_segment_results[2],
-        'll_acc_seg': ll_segment_results[0],
-        'll_IoU_seg': ll_segment_results[1],
-        'll_mIoU_seg': ll_segment_results[2],
-        'detect_result': detect_results[2],  # mAP@0.5
-        'loss_avg': total_loss,
-        'da_acc_seg_drop': 0.0,
-        'da_IoU_seg_drop': 0.0,
-        'da_mIoU_seg_drop': 0.0,
-        'll_acc_seg_drop': 0.0,
-        'll_IoU_seg_drop': 0.0,
-        'll_mIoU_seg_drop': 0.0,
-        'detect_result_drop': 0.0,  # mAP@0.5
-        'loss_avg_drop': 0.0
-    }
-
+    
 if __name__ == '__main__':
     main()

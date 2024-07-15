@@ -4,6 +4,13 @@ import shutil
 from tqdm import tqdm
 
 def organize_and_move_images(defended_image_dir, target_dir):
+    """
+    Organize and move defended images into structured directories based on attack and defense parameters.
+
+    Args:
+        defended_image_dir (str): Path to the directory containing defended images.
+        target_dir (str): Target directory where the organized images will be moved.
+    """
     # Get all directories to process
     all_dirs = []
     for root, dirs, files in os.walk(defended_image_dir):
@@ -53,6 +60,10 @@ def organize_and_move_images(defended_image_dir, target_dir):
             pbar_dirs.update(1)
             
 def main():
+    """
+    Main function to organize and move defended images.
+    """
+    
     defended_image_dir = "DefendedImages"
     target_dir = "lib/dataset/images/bdd100k"
     

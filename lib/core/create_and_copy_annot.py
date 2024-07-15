@@ -4,6 +4,14 @@ import itertools
 from tqdm import tqdm
 
 def create_and_link_annotations(defended_image_dir, annotation_dirs):
+    """
+    Create and link annotation files for defended images.
+
+    Args:
+        defended_image_dir (str): Path to the directory containing defended images.
+        annotation_dirs (list): List of directories containing annotation files.
+    """
+    
     counter = itertools.count(1)
     
     # Get all directories to process
@@ -59,17 +67,17 @@ def create_and_link_annotations(defended_image_dir, annotation_dirs):
                             dest_file = os.path.join(new_annotation_dir, f"{base_name}_{unique_id}{os.path.splitext(annotation_file_name)[1]}")
                             
                             if os.path.exists(src_file):
-                                # print(f"Source file: {src_file}")
-                                # print(f"Destination file: {dest_file}")
-                                
                                 os.symlink(src_file, dest_file)
-                                # print(f"Created symlink {dest_file} -> {src_file}")
                             else:
                                 print(f"Annotation file {src_file} does not exist.")
                     pbar_files.update(1)
             pbar_dirs.update(1)
             
 def main():
+    """
+    Main function to create and link annotation files.
+    """
+    
     defended_image_dir = "DefendedImages"
     annotation_dirs = [
         "/Volumes/hobbywobbies/REU-2024-YOLOP/lib/dataset/da_seg_annotations",

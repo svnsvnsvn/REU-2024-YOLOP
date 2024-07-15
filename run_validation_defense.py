@@ -23,13 +23,13 @@ import seaborn as sns
 from tqdm import tqdm
 from datetime import datetime
 
-from lib.core.Attacks.FGSM import fgsm_attack, fgsm_attack_with_noise, iterative_fgsm_attack
-from lib.core.Attacks.JSMA import calculate_saliency, find_and_perturb_highest_scoring_pixels
-from lib.core.Attacks.UAP import uap_sgd_yolop
-from lib.core.Attacks.CCP import color_channel_perturbation
-import random
-
 def parse_args():
+    """
+    Parse command line arguments.
+
+    Returns:
+        args: Parsed command line arguments.
+    """
     parser = argparse.ArgumentParser(description="Run validation for different attacks and defenses")
     parser.add_argument('--modelDir',
                         help='model directory',
@@ -59,6 +59,15 @@ def parse_args():
     return parser.parse_args()
 
 def read_attacked_metrics(csv_paths):
+    """
+    Read and combine attacked metrics from CSV files.
+
+    Args:
+        csv_paths (list): List of paths to CSV files.
+
+    Returns:
+        combined_df (pd.DataFrame): Combined dataframe of attacked metrics.
+    """
     combined_df = pd.DataFrame()
     for csv_path in csv_paths:
         df = pd.read_csv(csv_path)
@@ -66,59 +75,20 @@ def read_attacked_metrics(csv_paths):
         combined_df = pd.concat([combined_df, df], ignore_index=True)
     return combined_df
 
-def apply_attack(valid_loader, model, device, attack_params, criterion, cfg):
-    if attack_params['attack_type'] == 'FGSM':
-        epsilon = attack_params['epsilon']
-        perturbed_images = []
-        for img, target, paths, shapes in valid_loader:
-            img = img.to(device)
-            img.requires_grad = True
-            output = model(img)
-            loss = criterion(output, target)
-            model.zero_grad()
-            loss.backward()
-            img_grad = img.grad.data
-            perturbed_image = fgsm_attack(img, epsilon, img_grad)
-            perturbed_images.append(perturbed_image)
-        return torch.cat(perturbed_images)
-
-    elif attack_params['attack_type'] == 'JSMA':
-        saliency_maps = calculate_saliency(model, valid_loader, device, cfg, criterion)
-        images = []
-        for batch in valid_loader:
-            images.extend(batch[0].numpy())
-            break
-        perturbed_images, _ = find_and_perturb_highest_scoring_pixels(images, saliency_maps, attack_params['num_pixels'], attack_params['jsma_perturbation'], perturbation_type=attack_params['jsma_attack_type'])
-        return perturbed_images
-
-    elif attack_params['attack_type'] == 'UAP':
-        uap, loss_history = uap_sgd_yolop(model, valid_loader, device, attack_params['uap_max_iterations'], attack_params['uap_eps'], criterion, attack_params['uap_delta'], attack_params['uap_num_classes'], attack_params['uap_targeted'], attack_params['uap_batch_size'])
-        images = []
-        for batch in valid_loader:
-            images.extend(batch[0].numpy())
-            break
-        perturbed_images = torch.clamp(torch.tensor(images, dtype=torch.float32) + uap.unsqueeze(0), 0, 1)
-        return perturbed_images
-
-    elif attack_params['attack_type'] == 'CCP':
-        epsilon = attack_params['epsilon']
-        channel = attack_params['channel']
-        perturbed_images = []
-        for img, target, paths, shapes in valid_loader:
-            img = img.to(device)
-            img.requires_grad = True
-            output = model(img)
-            loss = criterion(output, target)
-            model.zero_grad()
-            loss.backward()
-            img_grad = img.grad.data
-            perturbed_image = color_channel_perturbation(img, epsilon, img_grad, channel)
-            perturbed_images.append(perturbed_image)
-        return torch.cat(perturbed_images)
-    return None
-
 def run_validation(cfg, args, attack_params, defense_params, baseline=False):
-    
+    """
+    Run the validation process for a given configuration, attack, and defense.
+
+    Args:
+        cfg: Configuration object.
+        args: Parsed command line arguments.
+        attack_params (dict): Parameters of the attack.
+        defense_params (str): Parameters of the defense.
+        baseline (bool): Whether to run baseline validation.
+
+    Returns:
+        dict: Results of the validation.
+    """
     if baseline:
         cfg.defrost()
         cfg.DATASET.TEST_SET = 'val'
@@ -192,9 +162,6 @@ def run_validation(cfg, args, attack_params, defense_params, baseline=False):
     epoch = 0
 
     perturbed_images = None
-    if validation_type == 'attack':
-        # Apply attack
-        perturbed_images = apply_attack(valid_loader, model, device, attack_params, criterion, cfg)
 
     da_segment_results, ll_segment_results, detect_results, total_loss, maps, times = validate(
         epoch, cfg, valid_loader, valid_dataset, model, criterion,
@@ -234,6 +201,14 @@ def run_validation(cfg, args, attack_params, defense_params, baseline=False):
     }
 
 def save_results(results, file_name, directory='.'):
+    """
+    Save results to a CSV file.
+
+    Args:
+        results (list): List of result dictionaries.
+        file_name (str): Name of the CSV file.
+        directory (str): Directory where the file will be saved.
+    """
     if not os.path.exists(directory):
         os.makedirs(directory)
     file_path = os.path.join(directory, file_name)
@@ -242,6 +217,15 @@ def save_results(results, file_name, directory='.'):
     print(f"Saved results to {file_path}")
 
 def prioritize_combinations(task_list):
+    """
+    Prioritize combinations of attack and defense tasks.
+
+    Args:
+        task_list (list): List of (attack_params, defense_params) tuples.
+
+    Returns:
+        prioritized_combinations (list): Prioritized list of tasks.
+    """
     prioritized_combinations = []
     for attack_params, defense_params in task_list:
         attack_type = attack_params['attack_type']
@@ -261,91 +245,17 @@ def prioritize_combinations(task_list):
             prioritized_combinations.append((attack_params, defense_params))
     return prioritized_combinations
 
-def plot_bar(df, metric, title, y_label, filename):
-    plt.figure(figsize=(14, 8))
-    sns.barplot(data=df, x='defense_type', y=metric, hue='attack_type')
-    plt.title(title)
-    plt.xlabel('Defense Type')
-    plt.ylabel(y_label)
-    plt.xticks(rotation=45)
-    plt.legend(title='Attack Type')
-    plt.tight_layout()
-    plt.savefig(filename)
-    # plt.show()
-
-def plot_heatmap(df, metric, title, filename):
-    pivot_table = df.pivot_table(index="defense_type", columns="attack_type", values=metric)
-    plt.figure(figsize=(12, 8))
-    sns.heatmap(pivot_table, annot=True, cmap="YlGnBu", fmt=".2f", linewidths=.5)
-    plt.title(title)
-    plt.xlabel('Attack Type')
-    plt.ylabel('Defense Type')
-    plt.tight_layout()
-    plt.savefig(filename)
-    # plt.show()
-
-def plot_box(df, metric, title, y_label, filename):
-    plt.figure(figsize=(14, 8))
-    sns.boxplot(data=df, x='defense_type', y=metric, hue='attack_type')
-    plt.title(title)
-    plt.xlabel('Defense Type')
-    plt.ylabel(y_label)
-    plt.xticks(rotation=45)
-    plt.legend(title='Attack Type')
-    plt.tight_layout()
-    plt.savefig(filename)
-    # plt.show()
-
-def plot_line(df, metric, param, title, y_label, filename):
-    plt.figure(figsize=(14, 8))
-    sns.lineplot(data=df, x=param, y=metric, hue='defense_type', style='attack_type', markers=True, dashes=False)
-    plt.title(title)
-    plt.xlabel(param)
-    plt.ylabel(y_label)
-    plt.legend(title='Defense Type')
-    plt.tight_layout()
-    plt.savefig(filename)
-    # plt.show()
-    
-    
-def plot_performance(df, metric, title, y_label, filename):
-    plt.figure(figsize=(14, 8))
-    # sns.set_palette("gray")  # Set the color palette to grayscale
-    purple_palette = sns.color_palette("Purples")
-
-    sns.set_palette(purple_palette)
-    # Separate the data into baseline, attacked, and defended
-    baseline_df = df[df['attack_type'] == 'Baseline']
-    attacked_df = df[(df['defense_type'] == 'none') & (df['attack_type'] != 'Baseline')]
-    defended_df = df[df['defense_type'] != 'none']
-
-    # Plot the baseline
-    if not baseline_df.empty:
-        sns.barplot(data=baseline_df, x='defense_type', y=metric, color='gray', label='Baseline')
-
-    # Plot the attacked
-    if not attacked_df.empty:
-        sns.barplot(data=attacked_df, x='defense_type', y=metric, color='red', label='Attacked')
-
-    # Plot the defended
-    if not defended_df.empty:
-        sns.barplot(data=defended_df, x='defense_type', y=metric, hue='attack_type', dodge=True, palette='dark')
-
-    plt.title(title, color='black')
-    plt.xlabel('Defense Type', color='black')
-    plt.ylabel(y_label, color='black')
-    plt.xticks(rotation=45, color='black')
-    plt.yticks(color='black')
-    handles, labels = plt.gca().get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    plt.legend(by_label.values(), by_label.keys(), title='Type', facecolor='white')
-    plt.tight_layout()
-    plt.ylim(0, 1)  # Ensuring a consistent scale on the y-axis for better comparability
-    plt.savefig(filename, facecolor='white')
-    # plt.show()
-
-
 def plot_performance_by_attack(df, metric, title_template, y_label, filename_template):
+    """
+    Plot performance metrics by attack type.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing the results.
+        metric (str): Metric to plot.
+        title_template (str): Template for the plot title.
+        y_label (str): Label for the y-axis.
+        filename_template (str): Template for the filename.
+    """
     attack_types = df['attack_type'].unique()
 
     for attack_type in attack_types:
@@ -353,7 +263,6 @@ def plot_performance_by_attack(df, metric, title_template, y_label, filename_tem
             continue
         
         plt.figure(figsize=(14, 8))
-        # sns.set_palette(purple_palette)
 
         # Filter for baseline and specific attack type
         filtered_df = df[(df['attack_type'] == attack_type) | (df['attack_type'] == 'Baseline')].copy()
@@ -393,13 +302,16 @@ def plot_performance_by_attack(df, metric, title_template, y_label, filename_tem
         plt.xticks(rotation=45, color='black')
         plt.yticks(color='black')
         plt.tight_layout()
-        plt.ylim(0, 1)  # Ensuring a consistent scale on the y-axis for better comparability
+        plt.ylim(0, 1)  
         filename = filename_template.format(attack_type)
         plt.savefig(filename, facecolor='white')
         plt.show()
-        plt.close()  # Close the figure after saving to avoid display issues in loops
+        plt.close()
 
 def main():
+    """
+    Main function to run the validation process.
+    """
     args = parse_args()
     update_config(cfg, args)
 
@@ -500,7 +412,7 @@ def main():
     baseline_result = run_validation(cfg, args, attack_params={}, defense_params={}, baseline=True)
     results.append(baseline_result)
     
-    # Read attacked-only metrics from multiple CSV files
+    # Read attacked-only metrics from CSV files
     csv_paths = [
         'csvs/CCP_epsilon_0.01_channel_B_validation_results_20240713-005540.csv',
         'csvs/CCP_epsilon_0.01_channel_G_validation_results_20240713-005313.csv',
@@ -561,11 +473,6 @@ def main():
         metrics = ['da_seg_acc', 'da_seg_iou', 'da_seg_miou', 'll_seg_acc', 'll_seg_iou', 'll_seg_miou', 'p', 'r', 'map50', 'map']
         attack_types = df_results['attack_type'].unique()
 
-        # for attack_type in attack_types:
-        #     if attack_type == 'Baseline':
-        #         continue
-        #     for metric in metrics:
-        #         plot_performance(df_results, metric, f'{attack_type} - {metric} Performance', metric, os.path.join(save_dir, f'{attack_type}_{metric}_performance_{timestamp}.png'))
         for metric in metrics:
             plot_performance_by_attack(df_results, metric, '{} - {}'.format(metric.upper(), metric.replace('_', ' ').title()), metric.replace('_', ' ').title(), os.path.join(save_dir, '{}_{}_performance_'.format(metric, '{}') + timestamp + '.png'))
     
@@ -581,7 +488,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
-    
-
-    
