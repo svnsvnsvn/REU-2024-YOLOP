@@ -32,6 +32,9 @@ Link for 162 epoch trained Pix2Pix: https://drive.google.com/file/d/1Dy6-QK6uJak
 Outside Sources:
 
 https://github.com/hustvl/YOLOP
+
 https://doc.bdd100k.com/download.html
+
 https://github.com/SekiroRong/YOLOP
+
 https://github.com/NVIDIA/pix2pixHD
