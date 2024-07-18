@@ -23,10 +23,15 @@ Within this repository, you will find the following:
 As part of our DEFENSE GAN training, we were tasked with generating 500 adversarial versions of images within BDD100K training imageset. Since it is not possible for us to upload the images to github due to their size, I will provide a Drive link below:
 https://drive.google.com/file/d/1GYsClGMjdcf-lCJk_mt5QLE3MYTVrFNp/view?usp=sharing
 
-
 Link for Pix2Pix imageset created based off BDD100K: https://drive.google.com/file/d/1PEuQxonaavtBCAztV1QIneYlT4sMz0qH/view?usp=sharing
 
 Link for 162 epoch trained Pix2Pix: https://drive.google.com/file/d/1Dy6-QK6uJakJgegrryQNPB0pHRX8H783/view?usp=sharing
+
+Link for 200 epoch trained Pix2Pix: https://drive.google.com/file/d/1y6qSAqZ95fVBVU9sj6pXv7Mh7AYQwSgz/view?usp=sharing
+
+Link for updated GAN synthesized images: https://drive.google.com/file/d/160VOgpqzqPT4Ck1oi-7G8ARRVnA_Db4j/view?usp=sharing
+
+Link for updated FGSM validation examples: https://drive.google.com/file/d/1_zsOsB6Xsz0Zjv10hRg-es44mHkU8Vd-/view?usp=sharing
 
 
 Outside Sources:
