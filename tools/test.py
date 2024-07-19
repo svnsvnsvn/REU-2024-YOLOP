@@ -9,7 +9,7 @@ sys.path.append(BASE_DIR)
 import pprint
 import torch
 import torch.nn.parallel
-import torch.backends.cudnn as cudnn
+# import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
@@ -34,6 +34,7 @@ from lib.core.Attacks.UAP import uap_sgd_yolop
 import datetime
 import matplotlib.pyplot as plt
 
+sns.set_theme(style="darkgrid", palette="Spectral")
 
 def plot_metrics(results_df, metric_list, x_param, attack_type, baseline_metrics, exp_output_dir):
     """
@@ -47,21 +48,57 @@ def plot_metrics(results_df, metric_list, x_param, attack_type, baseline_metrics
         baseline_metrics (dict): Baseline metrics.
         exp_output_dir (str): Directory to save the plots.
     """
-    # Ensure the directory exists
-    os.makedirs(exp_output_dir, exist_ok=True)
-    
-    for metric in metric_list:
-        plt.figure()
-        plt.plot(results_df[x_param], results_df[metric], marker='o', label='Experiment Results')
+    plt.figure(figsize=(14, 10))
+
+    for i, metric in enumerate(metric_list, 1):
+        plt.subplot(3, 3, i)
+        sns.lineplot(x=results_df[x_param], y=results_df[metric], marker='o', label='Experiment Results')
         plt.axhline(y=baseline_metrics[metric], color='r', linestyle='--', label='Baseline')
         plt.xlabel(x_param)
         plt.ylabel(metric)
         plt.title(f'{metric} vs {x_param} for {attack_type}')
-        plt.legend()
+        if i == 1:
+            plt.legend()
         plt.grid(True)
-        plt.savefig(f'{exp_output_dir}/{attack_type}_{metric}_plot.png')
-        plt.close()
 
+    plt.tight_layout()
+    plt.savefig(f'{exp_output_dir}/{attack_type}_metrics_plot.png')
+    plt.close()
+
+def plot_metrics_separate(results_df, metric_list, x_param, attack_type, baseline_metrics, exp_output_dir):
+    """
+    Plot metrics for the experiment results and save the plots separately for each perturbation type.
+
+    Args:
+        results_df (pd.DataFrame): DataFrame containing the experiment results.
+        metric_list (list): List of metrics to plot.
+        x_param (str): Parameter to plot on the x-axis.
+        attack_type (str): Type of attack.
+        baseline_metrics (dict): Baseline metrics.
+        exp_output_dir (str): Directory to save the plots.
+    """
+    perturb_types = results_df['perturb_type'].unique()
+    for perturb_type in perturb_types:
+        plt.figure(figsize=(14, 10))
+        subset = results_df[results_df['perturb_type'] == perturb_type]
+        
+        for i, metric in enumerate(metric_list, 1):
+            plt.subplot(3, 3, i)
+            sns.lineplot(x=subset[x_param], y=subset[metric], marker='o', label=f'{perturb_type} - {subset["perturb_value"].iloc[0]}')
+            plt.axhline(y=baseline_metrics[metric], color='r', linestyle='--', label='Baseline')
+            plt.xlabel(x_param)
+            plt.ylabel(metric)
+            plt.title(f'{metric} vs {x_param} for {attack_type} - {perturb_type}')
+            if i == 1:
+                plt.legend()
+            plt.grid(True)
+
+        plt.tight_layout()
+        perturb_dir = os.path.join(exp_output_dir, perturb_type)
+        os.makedirs(perturb_dir, exist_ok=True)
+        plt.savefig(f'{perturb_dir}/{attack_type}_{perturb_type}_metrics_plot.png')
+        plt.close()
+        
 def calculate_percentage_drop(initial, current):
     """
     Calculate the percentage drop from the initial value to the current value.
@@ -380,7 +417,7 @@ def process_results(exp_output_dir, logger, da_segment_results, ll_segment_resul
     })
     metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
     create_and_save_table(results_df, normal_metrics, metrics, param_name, f'{exp_output_dir}/{param_name}_results', results_df[param_name].unique(), '0', combine=True)
-    plot_metrics(results_df, metrics, param_name, param_name, normal_metrics, exp_output_dir)
+    # plot_metrics(results_df, metrics, param_name, param_name, normal_metrics, exp_output_dir)
 
 def create_normal_metrics(da_segment_results, ll_segment_results, detect_results, total_loss):
     """
@@ -522,7 +559,7 @@ def main():
 
     # Now run validations for each attack type
     if attack_type == "FGSM":
-        epsilons = [0.01, 0.05, 0.1, .5 ] if args.experiment_mode == 1 else [args.epsilon] 
+        epsilons = [0.0, 0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5] if args.experiment_mode == 1 else [args.epsilon] 
         '''.1, .3, .5, .75, 1, 3, 5, 7, 10'''
         for experiment_number, epsilon in enumerate(epsilons, start=1):
             exp_logger, exp_output_dir = create_experiment_logger(base_output_dir, experiment_number, attack_type, epsilon=epsilon)
@@ -551,7 +588,6 @@ def main():
         results_df = pd.DataFrame(results)
         
         # Define normal_metrics, metrics, and param_name
-        normal_metrics = create_normal_metrics(da_segment_results, ll_segment_results, detect_results, total_loss)
         metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
         param_name = 'epsilon'
 
@@ -560,19 +596,22 @@ def main():
 
     elif attack_type == "JSMA":
         perturbation_params = [
-            (10, 0.01, 'add'), (10, 0.5, 'set'), (10, 1, 'noise'),
-            (50, 0.01, 'add'), (50, 0.5, 'set'), (50, 1, 'noise'),
-            (100, 0.01, 'add'), (100, 0.5, 'set'), (100, 1, 'noise'),
-            
-        ] if args.experiment_mode else [(args.num_pixels, args.jsma_perturbation, args.jsma_attack_type)]
+    (9216, 0.01, 'add'), (18432, 0.01, 'add'), (27648, 0.01, 'add'), (36864, 0.01, 'add'), (46080, 0.01, 'add'), 
+    (55296, 0.1, 'add'), (64512, 0.1, 'add'), (73728, 0.1, 'add'), (82944, 0.1, 'add'), (92160, 0.1, 'add'),
+    (101376, 0.5, 'add'), (193536, 0.5, 'add'), (285696, 0.5, 'add'), (377856, 0.5, 'add'), (470016, 0.5, 'add'), 
+    (562176, 1, 'add'), (654336, 1, 'add'), (746496, 1, 'add'), (838656, 1, 'add'), (921600, 1, 'add') # 921600 pixels in a 1280 x 720 image
+] if args.experiment_mode else [(args.num_pixels, args.jsma_perturbation, args.jsma_attack_type)]
         
         for experiment_number, (num_pixels, perturb_value, perturb_type) in enumerate(perturbation_params, start=1):
+            print(f"The number of pixels - {num_pixels}")
+            print(f"The perturb value - {perturb_value}")
+
             saliency_maps = calculate_saliency(model, valid_loader, device, cfg, criterion)
             
             images = []
             for batch in valid_loader:
                 images.extend(batch[0].numpy())
-                if 0 == 0 :
+                if 0 == 0:
                     print("Breaking...")
                     break
             
@@ -591,7 +630,7 @@ def main():
             results.append({
                 "num_pixels": num_pixels,
                 "perturb_value": perturb_value,
-                "attack_type": attack_type,
+                "perturb_type": perturb_type,
                 "da_acc_seg": da_segment_results[0],
                 "da_IoU_seg": da_segment_results[1],
                 "da_mIoU_seg": da_segment_results[2],
@@ -605,13 +644,17 @@ def main():
             process_results(exp_output_dir, exp_logger, da_segment_results, ll_segment_results, detect_results, total_loss, normal_metrics, 'num_pixels', num_pixels)
 
         results_df = pd.DataFrame(results)
+        
+        print(f"\n{results_df}\n")
 
         # Define normal_metrics, metrics, and param_name
-        normal_metrics = create_normal_metrics(da_segment_results, ll_segment_results, detect_results, total_loss)
+        # normal_metrics = create_normal_metrics(da_segment_results, ll_segment_results, detect_results, total_loss)
         metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
-        param_name = 'num_pixels'
+        param_name = 'perturb_value'
 
         create_and_save_table(results_df, normal_metrics, metrics, param_name, f'{exp_output_dir}/{param_name}_results', results_df[param_name].unique(), '0', combine=True)
+        # plot_metrics(results_df, metrics, param_name, 'JSMA', normal_metrics, exp_output_dir)
+        # plot_metrics_separate(results_df, metrics, 'num_pixels', 'JSMA', normal_metrics, exp_output_dir)
         plot_metrics(results_df, metrics, param_name, 'JSMA', normal_metrics, exp_output_dir)
 
     elif attack_type == "UAP":
@@ -683,7 +726,7 @@ def main():
         results_df = pd.DataFrame(results)
         
         # Define normal_metrics, metrics, and param_name
-        normal_metrics = create_normal_metrics(da_segment_results, ll_segment_results, detect_results, total_loss)
+        # normal_metrics = create_normal_metrics(da_segment_results, ll_segment_results, detect_results, total_loss)
         metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
         param_name = 'eps'
 
@@ -692,12 +735,9 @@ def main():
 
     elif attack_type == "CCP":
         ccp_params = [
-            (0.01, 'R'),
-            (0.05, 'R'),
-            (0.01, 'G'),
-            (0.05, 'G'),
-            (0.01, 'B'),
-            (0.05, 'B')
+        (0.01, 'R'), (0.05, 'R'), (0.10, 'R'), (0.20, 'R'), (0.50, 'R'), (1.00, 'R'),
+        (0.01, 'G'), (0.05, 'G'), (0.10, 'G'), (0.20, 'G'), (0.50, 'G'), (1.00, 'G'),
+        (0.01, 'B'), (0.05, 'B'), (0.10, 'B'), (0.20, 'B'), (0.50, 'B'), (1.00, 'B')
         ] if args.experiment_mode else [(args.epsilon, args.color_channel)]
         
         for experiment_number, (epsilon, color_channel) in enumerate(ccp_params, start=1):
@@ -728,19 +768,26 @@ def main():
         results_df = pd.DataFrame(results)
         
         # Define normal_metrics, metrics, and param_name
-        normal_metrics = create_normal_metrics(da_segment_results, ll_segment_results, detect_results, total_loss)
+        # normal_metrics = create_normal_metrics(da_segment_results, ll_segment_results, detect_results, total_loss)
         metrics = ['da_acc_seg', 'da_IoU_seg', 'da_mIoU_seg', 'll_acc_seg', 'll_IoU_seg', 'll_mIoU_seg', 'loss_avg']
         param_name = 'epsilon'
 
         create_and_save_table(results_df, normal_metrics, metrics, param_name, f'{exp_output_dir}/{param_name}_results', results_df[param_name].unique(), '0', combine=True)
 
         # Plot combined metrics for each color channel
-        sns.set(style="whitegrid")
+        sns.set(style="darkgrid")
         fig, axes = plt.subplots(len(metrics), 1, figsize=(12, 4 * len(metrics)))
 
         for idx, metric in enumerate(metrics):
-            ax = axes[idx] if len(metrics) > 1 else axes
-            sns.lineplot(data=results_df, x=param_name, y=metric, hue='color_channel', marker='o', ax=ax)
+            ax = axes if len(metrics) == 1 else axes[idx]
+            for color_channel in ['R', 'G', 'B']:
+                channel_df = results_df[results_df['color_channel'] == color_channel]
+                if color_channel == 'R':
+                    sns.lineplot(data=channel_df, x=param_name, y=metric, color='red', marker='o', ax=ax, label='R')
+                elif color_channel == 'G':
+                    sns.lineplot(data=channel_df, x=param_name, y=metric, color='green', marker='o', ax=ax, label='G')
+                elif color_channel == 'B':
+                    sns.lineplot(data=channel_df, x=param_name, y=metric, color='blue', marker='o', ax=ax, label='B')
             ax.set_title(f'{metric} vs {param_name} for CCP')
             ax.set_xlabel(param_name)
             ax.set_ylabel(metric)
