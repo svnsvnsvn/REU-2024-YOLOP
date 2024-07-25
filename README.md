@@ -1,10 +1,10 @@
-This research work was conducted at Oakland University in the REU program and partially supported by the NSF REU grants CNS-1852475 and CNS-1938687.
+This research was conducted at Oakland University in the REU program and partially supported by the NSF REU grants CNS-1852475 and CNS-1938687.
 
 Advisor For This Project: Dr. Lanyu (Lori) Xu 
 
 Graduate Student Mentor: Yunge Li 
 
-Student Researchers: Harrison Haviland-Longo , Ann Ubaka
+Undergraduate Student Researchers: Harrison Haviland-Longo, Ann Ubaka
 
 Abstract:
 
@@ -13,7 +13,7 @@ Autonomous vehicles (AVs) leverage machine-learning perception models to detect 
 
 Within this repository, you will find the following:
 -YOLOP source code from https://github.com/hustvl/YOLOP
--Customized attacks, inlcuding the following attack types:
+-Customized attacks, including the following attack types:
   * FGSM Fast Gradient Sign Method
   * JSMA Jacobian-based Saliency Map Attack
   * UAP Universal Adversarial Perturbations
@@ -22,14 +22,14 @@ Within this repository, you will find the following:
   * Pre-Processing
   * Defense GAN
 
-As part of our DEFENSE GAN training, we were tasked with generating 500 adversarial versions of images within BDD100K training imageset. Since it is not possible for us to upload the images to github due to their size, I will provide a Drive link below:
+As part of our DEFENSE GAN training, we were tasked with generating 500 adversarial versions of images within the BDD100K training image set. Since it is not possible for us to upload the images to GitHub due to their size, I will provide a Drive link below:
 https://drive.google.com/file/d/1GYsClGMjdcf-lCJk_mt5QLE3MYTVrFNp/view?usp=sharing
 
 Link for Pix2Pix imageset created based off BDD100K: https://drive.google.com/file/d/1PEuQxonaavtBCAztV1QIneYlT4sMz0qH/view?usp=sharing
 
-Link for 162 epoch trained Pix2Pix: https://drive.google.com/file/d/1Dy6-QK6uJakJgegrryQNPB0pHRX8H783/view?usp=sharing
+Link for 162 epoch-trained Pix2Pix: https://drive.google.com/file/d/1Dy6-QK6uJakJgegrryQNPB0pHRX8H783/view?usp=sharing
 
-Link for 200 epoch trained Pix2Pix: https://drive.google.com/file/d/1y6qSAqZ95fVBVU9sj6pXv7Mh7AYQwSgz/view?usp=sharing
+Link for 200 epoch-trained Pix2Pix: https://drive.google.com/file/d/1y6qSAqZ95fVBVU9sj6pXv7Mh7AYQwSgz/view?usp=sharing
 
 Link for updated GAN synthesized images: https://drive.google.com/file/d/160VOgpqzqPT4Ck1oi-7G8ARRVnA_Db4j/view?usp=sharing
 
