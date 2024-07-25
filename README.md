@@ -12,12 +12,15 @@ Autonomous vehicles (AVs) leverage machine-learning perception models to detect 
 
 
 Within this repository, you will find the following:
+
 -YOLOP source code from https://github.com/hustvl/YOLOP
+
 -Customized attacks, including the following attack types:
   * FGSM Fast Gradient Sign Method
   * JSMA Jacobian-based Saliency Map Attack
   * UAP Universal Adversarial Perturbations
   * CCP Color Channel Perturbations
+
 -Customized defenses, including the following defense types:
   * Pre-Processing
   * Defense GAN
