@@ -45,6 +45,7 @@ Autonomous vehicles (AVs) leverage machine-learning perception models to detect 
   - `1 (True):` Runs with several pre-generated values.
   - `0 (False):` Provide your own parameters.
 
+#### Attack Choices
 #### FGSM Attack
 
 - **--epsilon:** Epsilon value for FGSM or CCP attack (default: `0.1`).
@@ -69,7 +70,12 @@ Autonomous vehicles (AVs) leverage machine-learning perception models to detect 
 
 - **--color_channel:** Color channel to perturb (`R`, `G`, `B`).
 
-#### Defenses
+  
+#### Defense Application
+```shell
+python lib/core/Defenses/preprocessing.py --input_image <input_image_path> --image_output <output_image_path> --defense <defense_type> [options]
+```   
+#### Pre-processing Choices
 
 - **--resizer:** Desired `WIDTHxHEIGHT` of your resized image.
 - **--quality:** Desired quality for JPEG compression output (`0-100`).
