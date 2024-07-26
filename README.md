@@ -13,6 +13,7 @@ Autonomous vehicles (AVs) leverage machine-learning perception models to detect 
 
 - **YOLOP Source Code**
   - Available at: [YOLOP GitHub Repository](https://github.com/hustvl/YOLOP)
+  - Please refer to the OFFICIAL YOLOP documentation to ensure proper installation of additonal dependencies. The original README is located within the YOLOP folder.
 
 - **Customized Attacks**
   - FGSM (Fast Gradient Sign Method)
@@ -23,6 +24,13 @@ Autonomous vehicles (AVs) leverage machine-learning perception models to detect 
 - **Customized Defenses**
   - Pre-Processing Techniques
   - Defense GAN
+
+
+
+In order to utilize the Defense GAN, please input perturbed images of size 512 x 512 into the TEST_A folder located in the Pix2PixHD datasets folder. Once the images are all loaded into the folder, run the following command to generate a new imageset of synthesized images.
+
+```python test.py --dataroot /home/reu/Documents/YOLOP-main/pix2pixHD/datasets/bdd100k --name trained --netG global --label_nc 0 --no_instance --how_many number_of_images --which_epoch 200 --checkpoints_dir /home/reu/Documents/YOLOP-main/pix2pixHD/trained```
+After image generation, the synthesized images will be stored in a folder named after the used epoch within the "trained" subfolder of the "results" folder. After generation, a script such as "namefixer" can be used to rename all of the images after their corresponding validation image from BDD100K, and then the images can be easily inputted into YOLOP through the validation folder of BDD100K located in the YOLOP datasets folder. You may then run the YOLOP test.py script as normal to collect loss and accuracy metrics.
 
 ### Resources and Links
 
